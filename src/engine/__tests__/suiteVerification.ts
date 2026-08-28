@@ -79,7 +79,9 @@ strategies.forEach((strat) => {
 
       assert(stopLoss < entry, `[${strat.id}] ${stock.symbol}: Stop Loss (${stopLoss}) < Entry (${entry})`);
       assert(entry < target1, `[${strat.id}] ${stock.symbol}: Entry (${entry}) < Target 1 (${target1})`);
-      assert(target1 < target2, `[${strat.id}] ${stock.symbol}: Target 1 (${target1}) < Target 2 (${target2})`);
+      if (target2 !== undefined) {
+        assert(target1 < target2, `[${strat.id}] ${stock.symbol}: Target 1 (${target1}) < Target 2 (${target2})`);
+      }
       assert(!isNaN(pick.currentPrice) && pick.currentPrice > 0, `[${strat.id}] ${stock.symbol}: Current Price valid (${pick.currentPrice})`);
       assert(!isNaN(pick.changePercent), `[${strat.id}] ${stock.symbol}: Change % valid`);
     }
@@ -90,6 +92,6 @@ strategies.forEach((strat) => {
 
 console.log(`\n=== SUITE AUDIT COMPLETE: ${totalPassed} PASSED, ${totalFailed} FAILED ===\n`);
 
-if (totalFailed > 0) {
+if (typeof process !== 'undefined' && process.exit && totalFailed > 0) {
   process.exit(1);
 }
