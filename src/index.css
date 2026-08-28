@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+
+  --color-ground: #F2F2F7;
+  --color-ground-secondary: #E5E5EA;
+
+  --color-text-primary: #1D1D1F;
+  --color-text-secondary: #6E6E73;
+  --color-text-tertiary: #8E8E93;
+
+  --color-accent-blue: #007AFF;
+  --color-accent-blue-light: rgba(0, 122, 255, 0.1);
+  --color-success-green: #28CD41;
+  --color-success-green-light: rgba(40, 205, 65, 0.1);
+  --color-hazard-red: #FF3B30;
+  --color-hazard-red-light: rgba(255, 59, 48, 0.1);
+  --color-warning-amber: #FF9500;
+  --color-warning-amber-light: rgba(255, 149, 0, 0.1);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+}
+
+:root {
+  --ground: #F2F2F7;
+  --ground-secondary: #E5E5EA;
+
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-hover: rgba(255, 255, 255, 0.85);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-border-subtle: rgba(255, 255, 255, 0.4);
+  --glass-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 2px 8px -1px rgba(0, 0, 0, 0.04);
+  --glass-shadow-hover: 0 20px 40px -10px rgba(0, 122, 255, 0.12), 0 8px 16px -2px rgba(0, 0, 0, 0.06);
+
+  --text-primary: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #8E8E93;
+
+  --accent-blue: #007AFF;
+  --accent-blue-light: rgba(0, 122, 255, 0.1);
+  --success-green: #28CD41;
+  --success-green-light: rgba(40, 205, 65, 0.1);
+  --hazard-red: #FF3B30;
+  --hazard-red-light: rgba(255, 59, 48, 0.1);
+  --warning-amber: #FF9500;
+  --warning-amber-light: rgba(255, 149, 0, 0.1);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  background: var(--ground);
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: #F2F2F7;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(0, 122, 255, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(52, 199, 89, 0.1) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(255, 149, 0, 0.08) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Glass panel classes */
+.vision-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 2px 8px -1px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.vision-glass-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vision-glass-hover:hover {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 40px -10px rgba(0, 122, 255, 0.14), 0 8px 20px -4px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+  transform: translateY(-2px);
+}
+
+.vision-glass-subtle {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* Typography Helpers */
+.text-display {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.text-title-1 {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.text-title-2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.text-title-3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.text-body {
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-callout {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.text-subhead {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.text-footnote {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.text-caption {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
