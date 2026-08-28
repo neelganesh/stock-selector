@@ -141,7 +141,7 @@ export const STOCK_UNIVERSE: RawStockData[] = [
     tradingSegment: 'F&O Segment',
     marketCapVal: 480000,
     volumeVal: 3100000,
-    ...generatePriceHistory('LT', 3600, 20, 0.016),
+    ...generatePriceHistory('LT', 3100, 12, 0.016),
   },
   {
     symbol: 'ITC',

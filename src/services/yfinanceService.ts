@@ -44,17 +44,22 @@ export async function fetchYFinanceData(
     return yfinanceCache.get(ticker)!;
   }
 
-  const rawYahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`;
+  const rawYahoo1Url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`;
+  const rawYahoo2Url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`;
   
   // List of endpoints to try in priority order:
-  // 1. Local Vite Proxies (query1 & query2 with User-Agent spoofing)
-  // 2. Public CORS proxies (corsproxy.io, allorigins, codetabs)
+  // 1. Vercel Rewrites / Local Vite Proxies (query1 & query2)
+  // 2. Public CORS proxies (corsproxy.io, allorigins, codetabs, freeboard)
+  // 3. Direct Yahoo Finance endpoints
   const candidateUrls = [
     `/api/yahoo1/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`,
     `/api/yahoo2/v8/finance/chart/${encodeURIComponent(ticker)}?range=1y&interval=1d`,
-    `https://corsproxy.io/?${encodeURIComponent(rawYahooUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(rawYahooUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rawYahooUrl)}`
+    `https://corsproxy.io/?${encodeURIComponent(rawYahoo1Url)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(rawYahoo1Url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rawYahoo1Url)}`,
+    `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(rawYahoo1Url)}`,
+    rawYahoo1Url,
+    rawYahoo2Url
   ];
 
   for (const url of candidateUrls) {
