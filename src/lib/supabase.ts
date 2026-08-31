@@ -1,89 +1,93 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase configuration - these should be set in environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Type definitions for our database tables
-export interface UserProfile {
-  id: string;
-  user_id: string;
-  zerodha_api_key?: string;
-  zerodha_api_secret?: string;
-  zerodha_access_token?: string;
-  zerodha_request_token?: string;
-  has_historical_access: boolean;
-  total_capital: number;
-  risk_per_trade: number;
-  paper_trading_mode: boolean;
-  created_at: string;
-  updated_at: string;
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase credentials not configured. Auth and database features will be disabled.');
 }
 
-export interface Trade {
+export const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+export type UserProfile = {
   id: string;
   user_id: string;
-  symbol: string;
-  name: string;
-  segment: 'F&O' | 'CASH';
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  total_capital: number;
+  risk_per_trade_pct: number;
+  max_position_pct: number;
+  max_sector_pct: number;
+  max_open_strategies: number;
+  daily_loss_limit_pct: number;
+  paper_trading_enabled: boolean;
+  paper_trading_capital: number;
+  zerodha_api_key: string | null;
+  zerodha_access_token: string | null;
+  zerodha_access_token_expires_at: string | null;
+  zerodha_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StrategyExecution = {
+  id: string;
+  user_id: string;
   strategy_id: string;
   strategy_name: string;
+  symbol: string;
+  name: string;
+  sector: string;
+  cap_category: 'large' | 'mid' | 'small';
   entry_price: number;
   stop_loss: number;
   target1: number;
-  target2?: number;
+  target2: number | null;
   quantity: number;
-  total_investment: number;
-  charges: TradeCharges;
-  status: 'PENDING' | 'OPEN' | 'CLOSED' | 'CANCELLED' | 'REJECTED';
-  entry_time?: string;
-  exit_time?: string;
-  exit_price?: number;
-  realized_pnl?: number;
-  unrealized_pnl?: number;
-  gtt_order_id_entry?: string;
-  gtt_order_id_sl?: string;
-  gtt_order_id_target1?: string;
-  gtt_order_id_target2?: string;
-  paper_trade: boolean;
-  notes?: string;
+  risk_amount: number;
+  risk_pct: number;
+  charges_estimate: number;
+  status: 'pending' | 'entry_placed' | 'entry_filled' | 'gtt_placed' | 'target1_hit' | 'target2_hit' | 'stop_loss_hit' | 'manually_exited' | 'cancelled' | 'rejected';
+  entry_order_id: string | null;
+  entry_order_variety: string | null;
+  gtt_id: string | null;
+  exit_order_id: string | null;
+  entry_filled_at: string | null;
+  exit_filled_at: string | null;
+  entry_filled_price: number | null;
+  exit_filled_price: number | null;
+  realized_pnl: number | null;
+  unrealized_pnl: number | null;
+  total_charges: number | null;
+  notes: string | null;
+  tags: string[] | null;
+  is_paper_trade: boolean;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface TradeCharges {
-  brokerage: number;
-  stt: number;
-  exchange_fees: number;
-  gst: number;
-  sebi_fees: number;
-  stamp_duty: number;
-  total: number;
-}
+export type TradeCashFlow = {
+  id: string;
+  execution_id: string;
+  user_id: string;
+  type: 'entry' | 'exit' | 'charge' | 'dividend';
+  amount: number;
+  date: string;
+  description: string;
+  created_at: string;
+};
 
-export interface BudgetState {
+export type CapitalSnapshot = {
+  id: string;
+  user_id: string;
   total_capital: number;
-  available_balance: number;
-  allocated_capital: number;
-  used_margin: number;
-  total_charges_today: number;
-  net_available: number;
-}
-
-export interface PortfolioAnalytics {
-  total_invested: number;
-  current_value: number;
-  total_realized_pnl: number;
-  total_unrealized_pnl: number;
-  total_pnl: number;
-  cagr: number;
-  xirr: number;
-  win_rate: number;
-  avg_win: number;
-  avg_loss: number;
-  profit_factor: number;
-  max_drawdown: number;
-  sharpe_ratio: number;
-}
+  available_margin: number;
+  deployed_capital: number;
+  risk_used_pct: number;
+  open_positions_count: number;
+  snapshot_date: string;
+  created_at: string;
+};

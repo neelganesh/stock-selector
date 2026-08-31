@@ -9,9 +9,10 @@ interface StockCardProps {
   stock: StockPick;
   index?: number;
   onOpenPositionCalculator?: (stock: StockPick) => void;
+  onOpenExecuteModal?: (stock: StockPick) => void;
 }
 
-export function StockCard({ stock, index = 0, onOpenPositionCalculator }: StockCardProps) {
+export function StockCard({ stock, index = 0, onOpenPositionCalculator, onOpenExecuteModal }: StockCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isPositive = stock.change >= 0;
 
@@ -291,6 +292,20 @@ export function StockCard({ stock, index = 0, onOpenPositionCalculator }: StockC
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                       <span>Position Calculator</span>
+                    </button>
+                  )}
+                  {onOpenExecuteModal && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenExecuteModal(stock);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-98"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                      <span>Execute Trade</span>
                     </button>
                   )}
                 </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StrategyProvider, useStrategy } from './context/StrategyContext';
 import { Sidebar } from './components/Sidebar';
@@ -8,6 +8,9 @@ import { ZerodhaLoginModal } from './components/ZerodhaLoginModal';
 import { SectorStrengthExplorer } from './components/SectorStrengthExplorer';
 import { PositionSizingModal } from './components/PositionSizingModal';
 import { CustomScripModal } from './components/CustomScripModal';
+import { CapitalBar } from './components/CapitalBar';
+import { ExecuteModal } from './components/ExecuteModal';
+import { ExecutionTracker } from './components/ExecutionTracker';
 import type { StockPick } from './engine/types';
 
 function DashboardContent() {
@@ -31,9 +34,40 @@ function DashboardContent() {
     setCustomScripList,
   } = useStrategy();
 
-  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions'>('signals');
   const [isCustomScripModalOpen, setIsCustomScripModalOpen] = useState(false);
   const [selectedStockForCalc, setSelectedStockForCalc] = useState<StockPick | null>(null);
+  const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
+  const [capitalData, setCapitalData] = useState<{
+    availableCapital: number;
+    riskLimitPct: number;
+  } | null>(null);
+
+  const isLoggedIn = activeDataSource.includes('Kite');
+
+  const handleExecute = async (params: any) => {
+    // TODO: Call /api/executions to create execution record
+    // TODO: Call /api/kite/orders to place entry order
+    // TODO: Call /api/kite/gtt to place GTT OCO
+    console.log('Execute trade:', params);
+    // For now just simulate success
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  };
+
+  // Fetch capital data for execute modal
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetch('/api/capital')
+        .then(res => res.json())
+        .then(data => {
+          setCapitalData({
+            availableCapital: data.availableCapital,
+            riskLimitPct: data.riskLimits?.riskPerTradePct || 2,
+          });
+        })
+        .catch(console.error);
+    }
+  }, [isLoggedIn]);
 
   // Filter and sort picks based on search query, signal filter, cap category & sort selection
   const processedPicks = [...picks]
@@ -169,6 +203,12 @@ function DashboardContent() {
                   <span>Import scrip.txt</span>
                 </button>
 
+                {/* Capital Bar - Top Right */}
+                <CapitalBar
+                  isLoggedIn={activeDataSource.includes('Kite')}
+                  onLoginClick={() => setIsZerodhaModalOpen(true)}
+                />
+
                 {/* Zerodha Login / Connect Button */}
                 <button
                   onClick={() => setIsZerodhaModalOpen(true)}
@@ -232,6 +272,20 @@ function DashboardContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 <span>Equal-Weighted Sector NAV Heatmap</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('executions')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'executions'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                <span>Strategy Executions</span>
               </button>
             </div>
 
@@ -405,59 +459,81 @@ function DashboardContent() {
 
                 {/* Stock Pick Cards Container */}
                 <div className="space-y-4 pt-2">
-                  {isScanning ? (
-                    <div className="space-y-4 py-8">
-                      {[1, 2, 3].map((n) => (
-                        <div
-                          key={n}
-                          className="h-32 rounded-2xl vision-glass animate-pulse border border-slate-200/50"
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <AnimatePresence mode="popLayout">
-                      {processedPicks.map((stock, index) => (
-                        <StockCard
-                          key={stock.id}
-                          stock={stock}
-                          index={index}
-                          onOpenPositionCalculator={(stk) => setSelectedStockForCalc(stk)}
-                        />
-                      ))}
-                    </AnimatePresence>
-                  )}
+                  {(() => {
+                    const currentTab: string = activeTab;
+                    if (currentTab === 'signals') {
+                      return (
+                        <>
+                          {isScanning ? (
+                            <div className="space-y-4 py-8">
+                              {[1, 2, 3].map((n) => (
+                                <div
+                                  key={n}
+                                  className="h-32 rounded-2xl vision-glass animate-pulse border border-slate-200/50"
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <AnimatePresence mode="popLayout">
+                              {processedPicks.map((stock, index) => (
+                                <StockCard
+                                  key={stock.id}
+                                  stock={stock}
+                                  index={index}
+                                  onOpenPositionCalculator={(stk) => setSelectedStockForCalc(stk)}
+                                  onOpenExecuteModal={(stk) => setSelectedStockForExecute(stk)}
+                                />
+                              ))}
+                            </AnimatePresence>
+                          )}
 
-                  {/* Empty state when no picks match */}
-                  {!isScanning && processedPicks.length === 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="py-16 text-center vision-glass rounded-3xl border border-slate-200/60"
-                    >
-                      <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 mb-3">
-                        <svg
-                          className="w-6 h-6"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={1.5}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                          />
-                        </svg>
-                      </div>
-                      <h4 className="text-base font-semibold text-slate-800">
-                        No Matching Stocks Found
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                        Try switching market cap scope (Large/Mid/Small) or selecting
-                        a different strategy from the left sidebar.
-                      </p>
-                    </motion.div>
-                  )}
+                          {/* Empty state when no picks match */}
+                          {!isScanning && processedPicks.length === 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="py-16 text-center vision-glass rounded-3xl border border-slate-200/60"
+                            >
+                              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 mb-3">
+                                <svg
+                                  className="w-6 h-6"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={1.5}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                  />
+                                </svg>
+                              </div>
+                              <h4 className="text-base font-semibold text-slate-800">
+                                No Matching Stocks Found
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                                Try switching market cap scope (Large/Mid/Small) or selecting
+                                a different strategy from the left sidebar.
+                              </p>
+                            </motion.div>
+                          )}
+                        </>
+                      );
+                    }
+                    if (currentTab === 'sector-heatmap') {
+                      return <SectorStrengthExplorer />;
+                    }
+                    if (currentTab === 'executions') {
+                      return (
+                        <ExecutionTracker
+                          isLoggedIn={isLoggedIn}
+                          onLoginClick={() => setIsZerodhaModalOpen(true)}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </>
             )}
@@ -500,6 +576,18 @@ function DashboardContent() {
           isOpen={!!selectedStockForCalc}
           stock={selectedStockForCalc}
           onClose={() => setSelectedStockForCalc(null)}
+        />
+
+        {/* Execute Trade Modal */}
+        <ExecuteModal
+          key={selectedStockForExecute?.id || selectedStockForExecute?.symbol || 'none'}
+          isOpen={!!selectedStockForExecute}
+          stock={selectedStockForExecute}
+          onClose={() => setSelectedStockForExecute(null)}
+          onExecute={handleExecute}
+          isLoggedIn={isLoggedIn}
+          availableCapital={capitalData?.availableCapital || 0}
+          riskLimitPct={capitalData?.riskLimitPct || 2}
         />
       </div>
     </div>
