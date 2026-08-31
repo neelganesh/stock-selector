@@ -8,6 +8,7 @@ import {
   testKiteSession,
   checkAndExtractRequestToken,
 } from '../services/kiteService';
+import { useAuth } from './AuthProvider';
 
 interface ZerodhaLoginModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface ZerodhaLoginModalProps {
 }
 
 export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: ZerodhaLoginModalProps) {
+  const { user } = useAuth();
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
   const [requestToken, setRequestToken] = useState('');
@@ -32,11 +34,56 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
       setApiSecret(creds.apiSecret || '');
       setRequestToken(extractedToken || creds.requestToken || creds.accessToken || '');
 
-      if (extractedToken || creds.requestToken || creds.apiKey) {
+      if (extractedToken) {
+        // Exchange request_token for access_token via backend
+        exchangeRequestToken(extractedToken);
+      } else if (creds.requestToken || creds.apiKey) {
         verifySession(creds);
       }
     }
   }, [isOpen]);
+
+  const exchangeRequestToken = async (token: string) => {
+    if (!user) {
+      setStatusType('error');
+      setStatusMessage('Please sign in first to link Zerodha account.');
+      return;
+    }
+
+    setStatusMessage('Exchanging request token for access token...');
+
+    try {
+      const response = await fetch('/api/kite/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await user.getIdToken())}`,
+        },
+        body: JSON.stringify({ requestToken: token }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to exchange token');
+      }
+
+      // Update local credentials with access token
+      const updated = saveKiteCredentials({
+        accessToken: data.access_token,
+        requestToken: token,
+        loginTime: new Date().toISOString(),
+      });
+
+      setStatusType('success');
+      setStatusMessage('Zerodha Kite API connected successfully!');
+      await verifySession(updated);
+      onCredentialsUpdated();
+    } catch (err: any) {
+      setStatusType('error');
+      setStatusMessage(err.message || 'Failed to exchange token. Please try again.');
+    }
+  };
 
   const verifySession = async (credsToTest = getKiteCredentials()) => {
     setIsTesting(true);
