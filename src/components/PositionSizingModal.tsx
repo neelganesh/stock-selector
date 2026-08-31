@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { StockPick } from '../engine/types';
+import { buildOCOOrderSet, placeOCOOrderSet } from '../services/gttService';
+import { calculateTradeCharges } from '../services/tradeService';
+import { createTrade } from '../services/tradeService';
+import { useAuth } from '../context/AuthContext';
 
 interface PositionSizingModalProps {
   isOpen?: boolean;
   stock?: StockPick | null;
   pick?: StockPick | null;
   onClose: () => void;
+  onTradeExecuted?: (success: boolean) => void;
 }
 
 export const PositionSizingModal: React.FC<PositionSizingModalProps> = ({
@@ -13,10 +18,15 @@ export const PositionSizingModal: React.FC<PositionSizingModalProps> = ({
   stock: inputStock,
   pick: inputPick,
   onClose,
+  onTradeExecuted,
 }) => {
   const pick = inputStock || inputPick;
-  const [totalCapital, setTotalCapital] = useState<number>(500000); // Default ₹5 Lakh
-  const [riskPercent, setRiskPercent] = useState<number>(1.0); // Default 1% risk per trade
+  const { profile } = useAuth();
+  const [totalCapital, setTotalCapital] = useState<number>(profile?.total_capital || 500000);
+  const [riskPercent, setRiskPercent] = useState<number>(profile?.risk_per_trade || 1.0);
+  const [executing, setExecuting] = useState(false);
+  const [executeResult, setExecuteResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [paperMode, setPaperMode] = useState(profile?.paper_trading_mode ?? true);
 
   const defaultEntry = pick?.signalDetails?.entry ?? pick?.currentPrice ?? 100;
   const defaultSl = pick?.signalDetails?.stopLoss ?? (pick?.currentPrice ? Number((pick.currentPrice * 0.95).toFixed(2)) : 95);
@@ -67,6 +77,106 @@ export const PositionSizingModal: React.FC<PositionSizingModalProps> = ({
   const handleSetEntryToCmp = () => {
     setCustomEntry(pick.currentPrice);
   };
+
+  // Execute trade handler
+  const handleExecuteTrade = useCallback(async () => {
+    if (!pick || !isValidSl || calculatedShares === 0) return;
+    
+    setExecuting(true);
+    setExecuteResult(null);
+
+    try {
+      // Calculate charges
+      const charges = calculateTradeCharges(
+        totalInvestmentRequired,
+        pick.tradingSegment === 'Cash Only', // Delivery for Cash Only segment
+        true // Buy order
+      );
+
+      // Build OCO order set
+      const exchange = pick.tradingSegment === 'F&O Segment' ? 'NFO' : 'NSE';
+      const product = pick.tradingSegment === 'F&O Segment' ? 'NRML' : 'CNC';
+      
+      const ocoSet = buildOCOOrderSet(
+        pick.symbol,
+        exchange,
+        entryPrice,
+        stopLossPrice,
+        target1,
+        target2,
+        calculatedShares,
+        product
+      );
+
+      let gttOrderIds: Record<string, string> = {};
+
+      if (!paperMode) {
+        // Place real GTT orders on Zerodha
+        const result = await placeOCOOrderSet(ocoSet);
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to place GTT orders');
+        }
+        
+        for (const order of result.orders) {
+          if (order.order_id) {
+            gttOrderIds[order.type.toLowerCase()] = order.order_id;
+          }
+        }
+      } else {
+        // Simulate order IDs for paper trading
+        gttOrderIds = {
+          entry: `PAPER_ENTRY_${Date.now()}`,
+          stop_loss: `PAPER_SL_${Date.now()}`,
+          target_1: `PAPER_T1_${Date.now()}`,
+          target_2: target2 ? `PAPER_T2_${Date.now()}` : '',
+        };
+      }
+
+      // Create trade record in Supabase
+      const tradeResult = await createTrade({
+        symbol: pick.symbol,
+        name: pick.name,
+        segment: pick.tradingSegment === 'F&O Segment' ? 'F&O' : 'CASH',
+        strategy_id: 'zerodha-swing',
+        strategy_name: 'Zerodha Swing Strategy',
+        entry_price: entryPrice,
+        stop_loss: stopLossPrice,
+        target1,
+        target2,
+        quantity: calculatedShares,
+        total_investment: totalInvestmentRequired,
+        charges,
+        gtt_order_id_entry: gttOrderIds.entry,
+        gtt_order_id_sl: gttOrderIds.stop_loss,
+        gtt_order_id_target1: gttOrderIds.target_1,
+        gtt_order_id_target2: gttOrderIds.target_2 || undefined,
+        paper_trade: paperMode,
+        notes: `Entry: ₹${entryPrice.toFixed(2)}, SL: ₹${stopLossPrice.toFixed(2)}, T1: ₹${target1.toFixed(2)}${target2 ? `, T2: ₹${target2.toFixed(2)}` : ''}`,
+      });
+
+      if (tradeResult.error) {
+        throw tradeResult.error;
+      }
+
+      setExecuteResult({
+        success: true,
+        message: `${paperMode ? 'Paper trade' : 'Live trade'} executed successfully! ${calculatedShares} shares @ ₹${entryPrice.toFixed(2)}. ${paperMode ? 'Simulated GTT orders placed.' : 'GTT OCO orders active on Zerodha.'}`,
+      });
+
+      onTradeExecuted?.(true);
+      
+      // Auto-close after 3 seconds on success
+      setTimeout(() => onClose(), 3000);
+    } catch (err) {
+      console.error('Trade execution error:', err);
+      setExecuteResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to execute trade. Check console for details.',
+      });
+    } finally {
+      setExecuting(false);
+    }
+  }, [pick, isValidSl, calculatedShares, entryPrice, stopLossPrice, target1, target2, totalInvestmentRequired, paperMode, onClose, onTradeExecuted]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
@@ -278,18 +388,109 @@ export const PositionSizingModal: React.FC<PositionSizingModalProps> = ({
               )}
             </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-white text-sm transition-colors cursor-pointer"
-          >
-            Close Calculator
-          </button>
+          {/* Risk Slider - Dynamic Position Sizing */}
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-slate-300 font-medium text-sm">Risk per Trade: {riskPercent.toFixed(1)}%</span>
+              <span className="text-emerald-400 font-mono text-sm">
+                Qty: {calculatedShares.toLocaleString('en-IN')} | Invest: ₹{Math.round(totalInvestmentRequired).toLocaleString('en-IN')} | Exposure: {capitalExposurePercent.toFixed(1)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3.0"
+              step="0.1"
+              value={riskPercent}
+              onChange={(e) => setRiskPercent(Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+            />
+            <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>0.5% Conservative</span>
+              <span>1.0% Standard</span>
+              <span>2.0% Aggressive</span>
+              <span>3.0% Max</span>
+            </div>
+          </div>
+
+          {/* Paper/Live Mode Toggle */}
+          <div className="flex items-center justify-between p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+            <div>
+              <div className="text-slate-300 font-medium text-sm">Execution Mode</div>
+              <div className="text-[11px] text-slate-500">
+                {paperMode ? 'Paper Trading - Simulated orders, no real money' : 'Live Trading - Real orders on Zerodha'}
+              </div>
+            </div>
+            <button
+              onClick={() => setPaperMode(!paperMode)}
+              className={`relative w-12 h-7 rounded-full transition-colors ${
+                paperMode ? 'bg-slate-700' : 'bg-emerald-500'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+                  paperMode ? 'left-0.5' : 'right-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Execute Trade Button */}
+          <div className="pt-2">
+            <button
+              onClick={handleExecuteTrade}
+              disabled={executing || !isValidSl || calculatedShares === 0}
+              className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
+                executing
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : !isValidSl || calculatedShares === 0
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  : paperMode
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
+            >
+              {executing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Executing...
+                </span>
+              ) : paperMode ? (
+                'Execute Paper Trade (Simulated)'
+              ) : (
+                'Execute Live Trade on Zerodha'
+              )}
+            </button>
+          </div>
+
+          {/* Execution Result */}
+          {executeResult && (
+            <div className={`mt-3 p-3 rounded-xl text-sm ${
+              executeResult.success
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
+            }`}>
+              {executeResult.message}
+            </div>
+          )}
+
+          {/* Close Button */}
+          <div className="pt-2">
+            <button
+              onClick={onClose}
+              className="w-full px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 font-medium text-slate-300 transition-colors"
+            >
+              Close Calculator
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
-};
+}
+
+  
