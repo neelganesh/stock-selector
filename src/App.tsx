@@ -13,6 +13,7 @@ import { ExecuteModal } from './components/ExecuteModal';
 import { ExecutionTracker } from './components/ExecutionTracker';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { AuthPage } from './components/AuthPage';
+import { PnLAnalytics } from './components/PnLAnalytics';
 import type { StockPick } from './engine/types';
 
 function DashboardContent() {
@@ -38,7 +39,7 @@ function DashboardContent() {
 
   const { user, profile, signOut } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics'>('signals');
   const [isCustomScripModalOpen, setIsCustomScripModalOpen] = useState(false);
   const [selectedStockForCalc, setSelectedStockForCalc] = useState<StockPick | null>(null);
   const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
@@ -330,6 +331,20 @@ function DashboardContent() {
                 </svg>
                 <span>Strategy Executions</span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'analytics'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <span>P&L Analytics</span>
+              </button>
             </div>
 
             {/* Metrics Overview Strip */}
@@ -570,6 +585,14 @@ function DashboardContent() {
                     if (currentTab === 'executions') {
                       return (
                         <ExecutionTracker
+                          isLoggedIn={isLoggedIn}
+                          onLoginClick={() => setIsZerodhaModalOpen(true)}
+                        />
+                      );
+                    }
+                    if (currentTab === 'analytics') {
+                      return (
+                        <PnLAnalytics
                           isLoggedIn={isLoggedIn}
                           onLoginClick={() => setIsZerodhaModalOpen(true)}
                         />
