@@ -11,6 +11,8 @@ import { CustomScripModal } from './components/CustomScripModal';
 import { CapitalBar } from './components/CapitalBar';
 import { ExecuteModal } from './components/ExecuteModal';
 import { ExecutionTracker } from './components/ExecutionTracker';
+import { AuthProvider, useAuth } from './components/AuthProvider';
+import { AuthPage } from './components/AuthPage';
 import type { StockPick } from './engine/types';
 
 function DashboardContent() {
@@ -34,10 +36,13 @@ function DashboardContent() {
     setCustomScripList,
   } = useStrategy();
 
+  const { user, profile, signOut } = useAuth();
+
   const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions'>('signals');
   const [isCustomScripModalOpen, setIsCustomScripModalOpen] = useState(false);
   const [selectedStockForCalc, setSelectedStockForCalc] = useState<StockPick | null>(null);
   const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [capitalData, setCapitalData] = useState<{
     availableCapital: number;
     riskLimitPct: number;
@@ -208,6 +213,44 @@ function DashboardContent() {
                   isLoggedIn={activeDataSource.includes('Kite')}
                   onLoginClick={() => setIsZerodhaModalOpen(true)}
                 />
+
+                {/* User Account / Auth Button */}
+                {user ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200 shadow-xs">
+                      <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
+                        {(profile?.full_name || user.email || 'U').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="hidden sm:block">
+                        <p className="text-[10px] font-bold text-slate-800 leading-tight max-w-[100px] truncate">
+                          {profile?.full_name || user.email?.split('@')[0]}
+                        </p>
+                        <p className="text-[9px] text-slate-400 leading-tight">
+                          {profile?.paper_trading_enabled ? 'Paper Trading' : 'Live Trading'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => signOut()}
+                      className="px-2.5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-all cursor-pointer"
+                      title="Sign out"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98"
+                  >
+                    <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span>Sign In</span>
+                  </button>
+                )}
 
                 {/* Zerodha Login / Connect Button */}
                 <button
@@ -589,6 +632,11 @@ function DashboardContent() {
           availableCapital={capitalData?.availableCapital || 0}
           riskLimitPct={capitalData?.riskLimitPct || 2}
         />
+
+        {/* Auth Modal */}
+        {isAuthModalOpen && (
+          <AuthPage onClose={() => setIsAuthModalOpen(false)} />
+        )}
       </div>
     </div>
   );
@@ -596,9 +644,11 @@ function DashboardContent() {
 
 export function App() {
   return (
-    <StrategyProvider>
-      <DashboardContent />
-    </StrategyProvider>
+    <AuthProvider>
+      <StrategyProvider>
+        <DashboardContent />
+      </StrategyProvider>
+    </AuthProvider>
   );
 }
 
