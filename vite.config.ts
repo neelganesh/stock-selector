@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      // List specific proxies FIRST (Vite matches the first entry that
+      // matches the path; more specific paths must be checked first).
       '/api/yahoo1': {
         target: 'https://query1.finance.yahoo.com',
         changeOrigin: true,
@@ -24,6 +26,13 @@ export default defineConfig({
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'application/json, text/plain, */*',
         },
+      },
+      // Catch-all: proxy every other /api/* to the production Vercel
+      // deployment (the actual serverless functions only exist there).
+      '/api': {
+        target: 'https://stock-selector-deploy.vercel.app',
+        changeOrigin: true,
+        secure: true,
       },
     },
   },
