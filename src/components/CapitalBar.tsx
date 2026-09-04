@@ -11,6 +11,12 @@ interface CapitalData {
   riskUsedPct: number;
   openPositionsCount: number;
   paperTrading: boolean;
+  paperTradingCapital: number;
+  paperDeployedCapital: number;
+  paperAvailableCapital: number;
+  paperRiskUsed: number;
+  paperRiskUsedPct: number;
+  paperOpenPositionsCount: number;
   riskLimits: {
     riskPerTradePct: number;
     maxPositionPct: number;
@@ -29,6 +35,7 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPaperTrading, setShowPaperTrading] = useState(false);
 
   const fetchCapitalData = async () => {
     if (!isLoggedIn) {
@@ -56,6 +63,10 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const togglePaperTrading = () => {
+    setShowPaperTrading(prev => !prev);
   };
 
   useEffect(() => {
@@ -122,9 +133,35 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
     );
   }
 
-  const { totalCapital, availableMargin, deployedCapital, availableCapital, riskUsed, riskUsedPct, openPositionsCount, paperTrading, riskLimits } = capitalData;
+  const { 
+    totalCapital, 
+    availableMargin, 
+    deployedCapital, 
+    availableCapital, 
+    riskUsed, 
+    riskUsedPct, 
+    openPositionsCount, 
+    paperTrading, 
+    paperTradingCapital,
+    paperDeployedCapital,
+    paperAvailableCapital,
+    paperRiskUsed,
+    paperRiskUsedPct,
+    paperOpenPositionsCount,
+    riskLimits 
+  } = capitalData;
 
-  const deployedPct = totalCapital > 0 ? (deployedCapital / totalCapital) * 100 : 0;
+  const isPaperMode = showPaperTrading && paperTrading;
+  
+  const displayCapital = isPaperMode ? paperTradingCapital : totalCapital;
+  const displayAvailableMargin = isPaperMode ? paperAvailableCapital : availableMargin;
+  const displayDeployedCapital = isPaperMode ? paperDeployedCapital : deployedCapital;
+  const displayAvailableCapital = isPaperMode ? paperAvailableCapital : availableCapital;
+  const displayRiskUsed = isPaperMode ? paperRiskUsed : riskUsed;
+  const displayRiskUsedPct = isPaperMode ? paperRiskUsedPct : riskUsedPct;
+  const displayOpenPositionsCount = isPaperMode ? paperOpenPositionsCount : openPositionsCount;
+  
+  const deployedPct = displayCapital > 0 ? (displayDeployedCapital / displayCapital) * 100 : 0;
 
   return (
     <div className="relative">
@@ -140,11 +177,23 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className={`w-2.5 h-2.5 rounded-full ${paperTrading ? 'bg-amber-400' : 'bg-emerald-500'}`}
+            className={`w-2.5 h-2.5 rounded-full ${isPaperMode ? 'bg-amber-400' : paperTrading ? 'bg-amber-400' : 'bg-emerald-500'}`}
           />
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-            {paperTrading ? 'PAPER' : 'LIVE'}
+            {isPaperMode ? 'PAPER' : paperTrading ? 'PAPER' : 'LIVE'}
           </span>
+          {paperTrading && (
+            <button
+              onClick={togglePaperTrading}
+              className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full transition-all ${
+                isPaperMode 
+                  ? 'bg-amber-100 text-amber-800' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {isPaperMode ? 'PAPER' : 'LIVE'}
+            </button>
+          )}
         </div>
 
         {/* Capital Summary */}
@@ -163,7 +212,7 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
               Risk: {riskUsedPct.toFixed(1)}%
             </span>
             <span className="text-slate-400">•</span>
-            <span className="font-medium text-slate-500">{openPositionsCount} pos</span>
+            <span className="font-medium text-slate-500">{displayOpenPositionsCount} pos</span>
           </div>
         </div>
 
@@ -202,8 +251,8 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
                 {/* Header */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${paperTrading ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                    Capital Overview {paperTrading && <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded">PAPER</span>}
+                    <span className={`w-2 h-2 rounded-full ${isPaperMode ? 'bg-amber-400' : paperTrading ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                    Capital Overview {isPaperMode && <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded">PAPER</span>}
                   </h3>
                   <button
                     onClick={() => setIsExpanded(false)}
@@ -221,7 +270,7 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-slate-600">Total Capital</span>
-                      <span className="font-bold text-slate-900">{formatCurrency(totalCapital)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(displayCapital)}</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <motion.div
@@ -236,7 +285,7 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-slate-600">Deployed</span>
-                      <span className="font-bold text-amber-600">{formatCurrency(deployedCapital)} ({deployedPct.toFixed(1)}%)</span>
+                      <span className="font-bold text-amber-600">{formatCurrency(displayDeployedCapital)} ({deployedPct.toFixed(1)}%)</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <motion.div
@@ -251,12 +300,12 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-slate-600">Available</span>
-                      <span className="font-bold text-emerald-700">{formatCurrency(availableCapital)}</span>
+                      <span className="font-bold text-emerald-700">{formatCurrency(displayAvailableCapital)}</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${totalCapital > 0 ? (availableCapital / totalCapital) * 100 : 0}%` }}
+                        animate={{ width: `${displayCapital > 0 ? (displayAvailableCapital / displayCapital) * 100 : 0}%` }}
                         className="h-full bg-emerald-500 rounded-full"
                       />
                     </div>
@@ -266,15 +315,15 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="font-medium text-slate-600">Risk Used</span>
-                      <span className={`font-bold ${riskUsedPct > riskLimits.riskPerTradePct ? 'text-red-600' : 'text-slate-600'}`}>
-                        {formatCurrency(riskUsed)} ({riskUsedPct.toFixed(1)}% / {riskLimits.riskPerTradePct}% limit)
+                      <span className={`font-bold ${displayRiskUsedPct > riskLimits.riskPerTradePct ? 'text-red-600' : 'text-slate-600'}`}>
+                        {formatCurrency(displayRiskUsed)} ({displayRiskUsedPct.toFixed(1)}% / {riskLimits.riskPerTradePct}% limit)
                       </span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${Math.min((riskUsedPct / riskLimits.riskPerTradePct) * 100, 100)}%` }}
-                        className={`h-full rounded-full ${riskUsedPct > riskLimits.riskPerTradePct ? 'bg-red-500' : 'bg-blue-500'}`}
+                        animate={{ width: `${Math.min((displayRiskUsedPct / riskLimits.riskPerTradePct) * 100, 100)}%` }}
+                        className={`h-full rounded-full ${displayRiskUsedPct > riskLimits.riskPerTradePct ? 'bg-red-500' : 'bg-blue-500'}`}
                       />
                     </div>
                   </div>
@@ -285,8 +334,10 @@ export function CapitalBar({ isLoggedIn, onLoginClick }: CapitalBarProps) {
 
                 {/* Live Margin */}
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-slate-600">Zerodha Available Margin</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(availableMargin)}</span>
+                  <span className="font-medium text-slate-600">
+                    {isPaperMode ? 'Paper Available Capital' : 'Zerodha Available Margin'}
+                  </span>
+                  <span className="font-bold text-slate-900">{formatCurrency(displayAvailableMargin)}</span>
                 </div>
 
                 {/* Risk Limits */}

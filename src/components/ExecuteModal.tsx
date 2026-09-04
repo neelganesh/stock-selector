@@ -11,6 +11,7 @@ interface ExecuteModalProps {
   isLoggedIn: boolean;
   availableCapital: number;
   riskLimitPct: number;
+  isPaperTrading?: boolean;
 }
 
 interface ExecuteParams {
@@ -26,6 +27,10 @@ interface ExecuteParams {
   riskAmount: number;
   riskPct: number;
   charges: ChargeBreakdown;
+  isPaperTrading?: boolean;
+  sector?: string;
+  name?: string;
+  capCategory?: 'large' | 'mid' | 'small';
 }
 
 interface ChargeBreakdown {
@@ -55,6 +60,7 @@ export function ExecuteModal({
   isLoggedIn,
   availableCapital,
   riskLimitPct,
+  isPaperTrading = false,
 }: ExecuteModalProps) {
   const [riskPct, setRiskPct] = useState(2); // Default 2% risk per trade
   const [entryPrice, setEntryPrice] = useState(0);
@@ -139,7 +145,7 @@ export function ExecuteModal({
 
   const handleExecute = async () => {
     if (!stock) return;
-    if (!isLoggedIn) {
+    if (!isLoggedIn && !isPaperTrading) {
       setError('Please login to Zerodha first');
       return;
     }
@@ -169,6 +175,10 @@ export function ExecuteModal({
         riskAmount,
         riskPct,
         charges,
+        isPaperTrading,
+        sector: stock.sector,
+        name: stock.name,
+        capCategory: stock.capCategory === 'all' ? 'large' : stock.capCategory,
       });
       onClose();
     } catch (err: any) {
@@ -210,18 +220,36 @@ export function ExecuteModal({
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="w-full max-w-2xl max-h-[90vh] overflow-y-auto vision-glass rounded-3xl border border-slate-200/80 shadow-2xl"
+          data-modal-panel
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-slate-200/60 sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                isPaperTrading
+                  ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+                  : 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+              }`}>
+                {isPaperTrading ? (
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                )}
               </div>
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900">Execute Trade</h2>
+                <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                  Execute Trade
+                  {isPaperTrading && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full">
+                      PAPER
+                    </span>
+                  )}
+                </h2>
                 <p className="text-xs text-slate-500 flex items-center gap-1">
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-full">
                     {stock.signal}
@@ -454,10 +482,14 @@ export function ExecuteModal({
             {/* Execute Button */}
             <motion.button
               onClick={handleExecute}
-              disabled={isExecuting || quantity <= 0 || !isLoggedIn}
+              disabled={isExecuting || quantity <= 0 || (!isLoggedIn && !isPaperTrading)}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full py-3.5 px-5 rounded-xl text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isPaperTrading
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-orange-500/30'
+                  : 'bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-emerald-500/30'
+              }`}
             >
               {isExecuting ? (
                 <>
@@ -471,13 +503,19 @@ export function ExecuteModal({
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                  <span>Place Entry Order + GTT (SL + Targets)</span>
+                  <span>
+                    {isPaperTrading
+                      ? 'Simulate Paper Trade (No Real Order)'
+                      : 'Place Entry Order + GTT (SL + Targets)'}
+                  </span>
                 </>
               )}
             </motion.button>
 
             <p className="text-center text-[10px] text-slate-400">
-              Places market entry order + GTT OCO (Stop Loss + Target 1 + Target 2)
+              {isPaperTrading
+                ? 'This is a simulated paper trade. No real order will be placed.'
+                : 'Places market entry order + GTT OCO (Stop Loss + Target 1 + Target 2)'}
             </p>
           </div>
         </motion.div>

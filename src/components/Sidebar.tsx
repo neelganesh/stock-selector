@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { useStrategy } from '../context/StrategyContext';
 import type { CapCategory } from '../engine/types';
+import { ThemeToggle } from './ThemeToggle';
 
 export const Sidebar: FC = () => {
   const {
@@ -29,7 +30,9 @@ export const Sidebar: FC = () => {
     <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0 flex flex-col gap-6 p-4 lg:p-6 vision-glass rounded-2xl border border-white/60 shadow-xl shadow-slate-200/50">
       {/* Sleek Monochrome Header Icon & Brand */}
       <div className="flex items-center justify-between pb-5 border-b border-slate-200/60">
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/20 ring-1 ring-slate-800">
             {/* Sleek geometric glass icon */}
             <svg
@@ -52,6 +55,7 @@ export const Sidebar: FC = () => {
             </h1>
             <p className="text-xs text-slate-500 font-medium">Algorithmic Screener</p>
           </div>
+        </div>
         </div>
 
         <button

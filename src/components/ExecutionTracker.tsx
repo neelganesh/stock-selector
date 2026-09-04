@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './GlassCard';
+import { TradeJournalEditor } from './TradeJournalEditor';
+import type { TradeJournalSavePayload } from './TradeJournalEditor';
+import { useToast } from './useToast';
 
 interface Execution {
   id: string;
@@ -27,6 +30,8 @@ interface Execution {
   realized_pnl: number | null;
   created_at: string;
   updated_at: string;
+  notes?: string | null;
+  tags?: string[] | null;
   cashFlows?: CashFlow[];
 }
 
@@ -87,6 +92,7 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const toast = useToast();
 
   const fetchExecutions = async () => {
     if (!isLoggedIn) {
@@ -96,18 +102,61 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
     }
 
     try {
-      const response = await fetch('/api/executions');
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Not logged in - just return empty
-          setExecutions([]);
-        } else {
-          throw new Error('Failed to fetch executions');
-        }
-        return;
+      // Fetch both live executions and paper positions in parallel
+      const [execRes, paperRes] = await Promise.all([
+        fetch('/api/executions'),
+        fetch('/api/paper-positions'),
+      ]);
+
+      const executions: Execution[] = [];
+      const paperItems: any[] = [];
+
+      if (execRes.ok) {
+        const data = await execRes.json();
+        executions.push(...data);
+      } else if (execRes.status !== 401) {
+        console.warn('Failed to fetch live executions');
       }
-      const data = await response.json();
-      setExecutions(data);
+
+      if (paperRes.ok) {
+        const data = await paperRes.json();
+        // Map paper positions to Execution shape for unified rendering
+        for (const p of data) {
+          executions.push({
+            id: `paper_${p.id}`,
+            strategy_id: p.strategy_id,
+            strategy_name: p.strategy_name,
+            symbol: p.symbol,
+            exchange: 'NSE',
+            entry_price: p.entry_price,
+            stop_loss: p.stop_loss,
+            target1: p.target1,
+            target2: p.target2,
+            quantity: p.quantity,
+            product: 'CNC',
+            risk_amount: p.risk_amount,
+            risk_pct: p.risk_pct,
+            capital_allocated: p.entry_price * p.quantity,
+            charges_estimate: p.charges_estimate,
+            status: p.status,
+            entry_filled_price: p.entry_filled_price,
+            entry_filled_at: p.entry_filled_at,
+            exit_filled_price: p.exit_filled_price,
+            exit_filled_at: p.exit_filled_at,
+            total_charges: p.total_charges,
+            realized_pnl: p.realized_pnl,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+            notes: p.notes,
+            tags: p.tags,
+          } as Execution);
+        }
+        paperItems.push(...data);
+      } else if (paperRes.status !== 401) {
+        console.warn('Failed to fetch paper positions');
+      }
+
+      setExecutions(executions);
     } catch (err) {
       console.error('Fetch executions error:', err);
     } finally {
@@ -135,7 +184,11 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
 
   const handleExit = async (execution: Execution, exitPrice: number, status: 'target1_hit' | 'target2_hit' | 'stop_loss_hit' | 'manually_exited') => {
     try {
-      const response = await fetch(`/api/executions/${execution.id}`, {
+      const isPaper = execution.id.startsWith('paper_');
+      const realId = isPaper ? execution.id.replace('paper_', '') : execution.id;
+      const endpoint = isPaper ? `/api/paper-positions/${realId}` : `/api/executions/${execution.id}`;
+
+      const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,25 +198,54 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
         }),
       });
       if (!response.ok) throw new Error('Failed to update execution');
+      toast.success(`Position for ${execution.symbol} closed successfully`);
       fetchExecutions();
     } catch (err) {
       console.error('Exit error:', err);
-      alert('Failed to exit position');
+      toast.error('Failed to exit position');
     }
   };
 
   const handleCancel = async (execution: Execution) => {
     if (!confirm('Cancel this execution?')) return;
     try {
-      const response = await fetch(`/api/executions/${execution.id}`, {
+      const isPaper = execution.id.startsWith('paper_');
+      const realId = isPaper ? execution.id.replace('paper_', '') : execution.id;
+      const endpoint = isPaper ? `/api/paper-positions/${realId}` : `/api/executions/${execution.id}`;
+
+      const response = await fetch(endpoint, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to cancel execution');
+      toast.success(`Execution for ${execution.symbol} cancelled`);
       fetchExecutions();
     } catch (err) {
       console.error('Cancel error:', err);
-      alert('Failed to cancel execution');
+      toast.error('Failed to cancel execution');
     }
+  };
+
+  const handleJournalSave = async (
+    execution: Execution,
+    payload: TradeJournalSavePayload
+  ) => {
+    const isPaper = execution.id.startsWith('paper_');
+    const realId = isPaper ? execution.id.replace('paper_', '') : execution.id;
+    const endpoint = isPaper ? `/api/paper-positions/${realId}` : `/api/executions/${execution.id}`;
+
+    const response = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: payload.notes, tags: payload.tags }),
+    });
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(errBody || 'Failed to save journal');
+    }
+    // Optimistic local update so the editor exits cleanly without a full refetch flash
+    setExecutions((prev) =>
+      prev.map((e) => (e.id === execution.id ? { ...e, notes: payload.notes, tags: payload.tags } : e))
+    );
   };
 
   const getUnrealizedPnL = (execution: Execution) => {
@@ -306,6 +388,11 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${STATUS_CONFIG[execution.status]?.color || 'text-slate-600'} ${STATUS_CONFIG[execution.status]?.bg || 'bg-slate-100'}`}>
                         {STATUS_CONFIG[execution.status]?.label || execution.status}
                       </span>
+                      {execution.id.startsWith('paper_') && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">
+                          📝 PAPER
+                        </span>
+                      )}
                       <span className="text-xs text-slate-400">{execution.strategy_name}</span>
                       <span className="text-[10px] text-slate-400 ml-auto">{formatDate(execution.created_at)}</span>
                     </div>
@@ -463,6 +550,18 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {/* Trade Journal */}
+                {expandedId === execution.id && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <TradeJournalEditor
+                      executionId={execution.id}
+                      initialNotes={execution.notes ?? ''}
+                      initialTags={execution.tags ?? []}
+                      onSave={(payload) => handleJournalSave(execution, payload)}
+                    />
+                  </div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

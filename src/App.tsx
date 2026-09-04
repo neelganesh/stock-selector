@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StrategyProvider, useStrategy } from './context/StrategyContext';
 import { Sidebar } from './components/Sidebar';
+import { MobileSidebarDrawer } from './components/MobileSidebarDrawer';
+import { MobileBodyClass } from './components/MobileBodyClass';
 import { StockCard } from './components/StockCard';
 import { GlassCard } from './components/GlassCard';
 import { ZerodhaLoginModal } from './components/ZerodhaLoginModal';
@@ -11,9 +13,13 @@ import { CustomScripModal } from './components/CustomScripModal';
 import { CapitalBar } from './components/CapitalBar';
 import { ExecuteModal } from './components/ExecuteModal';
 import { ExecutionTracker } from './components/ExecutionTracker';
+import { ToastProvider } from './components/ToastProvider';
+import { useToast } from './components/useToast';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { AuthPage } from './components/AuthPage';
 import { PnLAnalytics } from './components/PnLAnalytics';
+import { SettingsPage } from './components/SettingsPage';
+import { useTheme } from './hooks/useTheme';
 import type { StockPick } from './engine/types';
 
 function DashboardContent() {
@@ -38,8 +44,9 @@ function DashboardContent() {
   } = useStrategy();
 
   const { user, profile, signOut } = useAuth();
+  const toast = useToast();
 
-  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics' | 'settings'>('signals');
   const [isCustomScripModalOpen, setIsCustomScripModalOpen] = useState(false);
   const [selectedStockForCalc, setSelectedStockForCalc] = useState<StockPick | null>(null);
   const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
@@ -52,10 +59,45 @@ function DashboardContent() {
   const isLoggedIn = activeDataSource.includes('Kite');
 
   const handleExecute = async (params: any) => {
+    if (params.isPaperTrading) {
+      // Paper trading - create simulated position
+      const response = await fetch('/api/paper-positions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy_id: activeStrategy.id,
+          strategy_name: activeStrategy.name,
+          symbol: params.symbol,
+          name: params.name || params.symbol,
+          sector: params.sector || 'Unknown',
+          cap_category: params.capCategory || 'large',
+          entry_price: params.entryPrice,
+          stop_loss: params.stopLoss,
+          target1: params.target1,
+          target2: params.target2,
+          quantity: params.quantity,
+          risk_amount: params.riskAmount,
+          risk_pct: params.riskPct,
+          charges_estimate: params.charges,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Paper trade failed');
+      }
+
+      const result = await response.json();
+      console.log('Paper trade executed:', result);
+      toast.success(`Paper position opened: ${params.symbol} × ${params.quantity}`);
+      return result;
+    }
+
+    // Live trading - real order flow
     // TODO: Call /api/executions to create execution record
     // TODO: Call /api/kite/orders to place entry order
     // TODO: Call /api/kite/gtt to place GTT OCO
-    console.log('Execute trade:', params);
+    console.log('Execute live trade:', params);
     // For now just simulate success
     await new Promise(resolve => setTimeout(resolve, 1000));
   };
@@ -159,7 +201,9 @@ function DashboardContent() {
         {/* Main 2-Column Sidebar Layout */}
         <div className="flex flex-col lg:flex-row gap-8 items-start">
           {/* Left Strategy Selector Sidebar */}
-          <Sidebar />
+          <MobileSidebarDrawer>
+            <Sidebar />
+          </MobileSidebarDrawer>
 
           {/* Right Main Content */}
           <main className="flex-1 w-full min-w-0 space-y-6">
@@ -344,6 +388,21 @@ function DashboardContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 <span>P&L Analytics</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>Settings</span>
               </button>
             </div>
 
@@ -598,6 +657,14 @@ function DashboardContent() {
                         />
                       );
                     }
+                    if (currentTab === 'settings') {
+                      return (
+                        <SettingsPage
+                          isLoggedIn={isLoggedIn}
+                          onLoginClick={() => setIsAuthModalOpen(true)}
+                        />
+                      );
+                    }
                     return null;
                   })()}
                 </div>
@@ -638,7 +705,7 @@ function DashboardContent() {
 
         {/* Risk & Position Sizing Calculator Modal */}
         <PositionSizingModal
-          key={selectedStockForCalc?.id || selectedStockForCalc?.symbol || 'none'}
+          key={selectedStockForCalc ? `calc-${selectedStockForCalc.id || selectedStockForCalc.symbol}` : 'calc-closed'}
           isOpen={!!selectedStockForCalc}
           stock={selectedStockForCalc}
           onClose={() => setSelectedStockForCalc(null)}
@@ -646,7 +713,7 @@ function DashboardContent() {
 
         {/* Execute Trade Modal */}
         <ExecuteModal
-          key={selectedStockForExecute?.id || selectedStockForExecute?.symbol || 'none'}
+          key={selectedStockForExecute ? `exec-${selectedStockForExecute.id || selectedStockForExecute.symbol}` : 'exec-closed'}
           isOpen={!!selectedStockForExecute}
           stock={selectedStockForExecute}
           onClose={() => setSelectedStockForExecute(null)}
@@ -654,6 +721,7 @@ function DashboardContent() {
           isLoggedIn={isLoggedIn}
           availableCapital={capitalData?.availableCapital || 0}
           riskLimitPct={capitalData?.riskLimitPct || 2}
+          isPaperTrading={profile?.paper_trading_enabled ?? true}
         />
 
         {/* Auth Modal */}
@@ -669,10 +737,20 @@ export function App() {
   return (
     <AuthProvider>
       <StrategyProvider>
-        <DashboardContent />
+        <ToastProvider>
+          <ThemeBootstrap />
+          <MobileBodyClass />
+          <DashboardContent />
+        </ToastProvider>
       </StrategyProvider>
     </AuthProvider>
   );
+}
+
+/** Mounts the theme hook at the app root so [data-theme] is applied before paint. */
+function ThemeBootstrap() {
+  useTheme();
+  return null;
 }
 
 export default App;

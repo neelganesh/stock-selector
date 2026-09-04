@@ -33,6 +33,37 @@ export type UserProfile = {
   updated_at: string;
 };
 
+export type PaperPosition = {
+  id: string;
+  user_id: string;
+  strategy_id: string;
+  strategy_name: string;
+  symbol: string;
+  name: string;
+  sector: string;
+  cap_category: 'large' | 'mid' | 'small';
+  entry_price: number;
+  stop_loss: number;
+  target1: number;
+  target2: number | null;
+  quantity: number;
+  risk_amount: number;
+  risk_pct: number;
+  charges_estimate: number;
+  status: 'pending' | 'entry_filled' | 'target1_hit' | 'target2_hit' | 'stop_loss_hit' | 'manually_exited' | 'cancelled' | 'rejected';
+  entry_filled_at: string | null;
+  exit_filled_at: string | null;
+  entry_filled_price: number | null;
+  exit_filled_price: number | null;
+  realized_pnl: number | null;
+  unrealized_pnl: number | null;
+  total_charges: number | null;
+  notes: string | null;
+  tags: string[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type StrategyExecution = {
   id: string;
   user_id: string;

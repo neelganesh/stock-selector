@@ -52,6 +52,7 @@ export function AuthPage({ onClose }: { onClose: () => void }) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           className="relative w-full max-w-md bg-white/85 backdrop-blur-xl border border-white/80 rounded-3xl shadow-2xl overflow-hidden text-slate-800 p-6 sm:p-8 space-y-6"
+          data-modal-panel
         >
           <button
             onClick={onClose}

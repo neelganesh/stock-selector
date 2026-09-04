@@ -74,12 +74,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName?: string) => {
     if (!supabase) return { error: new Error('Supabase not configured') };
-    const { error } = await supabase.auth.signUp({ 
-      email, 
+    const { data, error } = await supabase.auth.signUp({
+      email,
       password,
-      options: { data: { full_name: fullName } }
+      options: { data: { full_name: fullName } },
     });
-    return { error };
+    if (error) return { error };
+
+    // Create a user_profiles row for the new user. RLS lets a user insert
+    // their own profile (auth.uid() = user_id). The schema's UNIQUE(user_id)
+    // constraint means a duplicate insert is rejected — we treat that as
+    // non-fatal in case a database trigger already created the row.
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert(
+          {
+            user_id: data.user.id,
+            email,
+            full_name: fullName ?? null,
+          },
+          { onConflict: 'user_id', ignoreDuplicates: true }
+        );
+      // Ignore "duplicate key" errors — the row already exists, that's fine.
+      if (profileError && profileError.code !== '23505') {
+        return { error: profileError };
+      }
+    }
+    return { error: null };
   };
 
   const signOut = async () => {
