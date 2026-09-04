@@ -103,32 +103,72 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
     }
   };
 
-  const handleSaveAndLogin = () => {
-    if (!apiKey.trim()) {
+  const handleSaveAndLogin = async () => {
+    if (!user) {
       setStatusType('error');
-      setStatusMessage('Please enter your Zerodha Kite API Key.');
+      setStatusMessage('Please sign in first to save Zerodha credentials.');
+      return;
+    }
+    if (!apiKey.trim() || !apiSecret.trim()) {
+      setStatusType('error');
+      setStatusMessage('Please enter both your Zerodha Kite API Key and API Secret.');
       return;
     }
 
-    const updated = saveKiteCredentials({
-      apiKey: apiKey.trim(),
-      apiSecret: apiSecret.trim(),
-    });
-
-    const loginUrl = getKiteLoginUrl(updated.apiKey);
-    
-    // Redirect / open Zerodha Kite OAuth Login URL
-    window.location.href = loginUrl;
+    setStatusType('idle');
+    setStatusMessage('Saving credentials…');
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          zerodha_api_key: apiKey.trim(),
+          zerodha_api_secret: apiSecret.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save credentials');
+      }
+      const loginUrl = getKiteLoginUrl(apiKey.trim());
+      window.location.href = loginUrl;
+    } catch (err: any) {
+      setStatusType('error');
+      setStatusMessage(err.message || 'Failed to save credentials');
+    }
   };
 
   const handleManualSave = async () => {
-    const updated = saveKiteCredentials({
-      apiKey: apiKey.trim(),
-      apiSecret: apiSecret.trim(),
-      requestToken: requestToken.trim(),
-    });
-    await verifySession(updated);
-    onCredentialsUpdated();
+    if (!user) return;
+    setStatusType('idle');
+    setStatusMessage('Saving credentials…');
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          zerodha_api_key: apiKey.trim(),
+          zerodha_api_secret: apiSecret.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save credentials');
+      }
+      setStatusType('success');
+      setStatusMessage('Credentials saved. You can now log in to Zerodha.');
+    } catch (err: any) {
+      setStatusType('error');
+      setStatusMessage(err.message || 'Failed to save credentials');
+    }
   };
 
   const handleDisconnect = () => {
@@ -160,6 +200,7 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             className="relative w-full max-w-lg bg-white/85 backdrop-blur-xl border border-white/80 rounded-3xl shadow-2xl overflow-hidden text-slate-800 p-6 sm:p-8 space-y-6"
+            data-modal-panel
           >
             {/* Close Button */}
             <button

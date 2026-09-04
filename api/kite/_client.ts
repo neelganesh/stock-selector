@@ -27,11 +27,11 @@ export interface AuthContext {
 async function getUserKiteCredentials(userId: string): Promise<KiteCredentials | null> {
   const { data: profile } = await supabaseAdmin
     .from('user_profiles')
-    .select('zerodha_api_key, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
+    .select('zerodha_api_key, zerodha_api_secret, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
     .eq('user_id', userId)
     .single();
 
-  if (!profile?.zerodha_api_key) return null;
+  if (!profile?.zerodha_api_key || !profile?.zerodha_api_secret) return null;
 
   // Check if access token is expired (expires at 6 AM next day)
   const isExpired = profile.zerodha_access_token_expires_at
@@ -40,7 +40,7 @@ async function getUserKiteCredentials(userId: string): Promise<KiteCredentials |
 
   return {
     apiKey: profile.zerodha_api_key,
-    apiSecret: process.env.KITE_API_SECRET!, // Stored in Vercel env, not user-specific
+    apiSecret: profile.zerodha_api_secret,
     accessToken: isExpired ? undefined : profile.zerodha_access_token,
     userId: profile.zerodha_user_id || undefined,
   };

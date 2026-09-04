@@ -5,6 +5,18 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
+-- TRIGGER FUNCTION: updated_at
+-- (defined first so all table triggers can reference it)
+-- ============================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- ============================================
 -- USER PROFILES TABLE
 -- ============================================
 CREATE TABLE user_profiles (
@@ -28,6 +40,7 @@ CREATE TABLE user_profiles (
   
   -- Zerodha Credentials (encrypted at rest via Supabase Vault or app-level encryption)
   zerodha_api_key TEXT,
+  zerodha_api_secret TEXT,
   zerodha_access_token TEXT,
   zerodha_access_token_expires_at TIMESTAMPTZ,
   zerodha_user_id TEXT,
@@ -133,6 +146,85 @@ CREATE POLICY "Users can update own executions" ON strategy_executions
   FOR UPDATE USING (auth.uid() = user_id);
 
 -- ============================================
+-- PAPER POSITIONS TABLE (for paper trading virtual portfolio)
+-- ============================================
+CREATE TABLE paper_positions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  
+  -- Strategy Info
+  strategy_id TEXT NOT NULL,
+  strategy_name TEXT NOT NULL,
+  
+  -- Stock Info
+  symbol TEXT NOT NULL,
+  name TEXT NOT NULL,
+  sector TEXT NOT NULL,
+  cap_category TEXT NOT NULL CHECK (cap_category IN ('large', 'mid', 'small')),
+  
+  -- Trade Parameters
+  entry_price NUMERIC(15, 2) NOT NULL,
+  stop_loss NUMERIC(15, 2) NOT NULL,
+  target1 NUMERIC(15, 2) NOT NULL,
+  target2 NUMERIC(15, 2),
+  quantity INTEGER NOT NULL,
+  risk_amount NUMERIC(15, 2) NOT NULL,
+  risk_pct NUMERIC(5, 2) NOT NULL,
+  charges_estimate NUMERIC(15, 2) NOT NULL DEFAULT 0,
+  
+  -- Status Tracking
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
+    'pending', 'entry_filled', 'target1_hit', 'target2_hit', 'stop_loss_hit', 
+    'manually_exited', 'cancelled', 'rejected'
+  )),
+  
+  -- Fill Details
+  entry_filled_at TIMESTAMPTZ,
+  exit_filled_at TIMESTAMPTZ,
+  entry_filled_price NUMERIC(15, 2),
+  exit_filled_price NUMERIC(15, 2),
+  
+  -- P&L
+  realized_pnl NUMERIC(15, 2),
+  unrealized_pnl NUMERIC(15, 2),
+  total_charges NUMERIC(15, 2),
+  
+  -- Notes & Tags
+  notes TEXT,
+  tags TEXT[],
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_paper_positions_user_id ON paper_positions(user_id);
+CREATE INDEX idx_paper_positions_status ON paper_positions(status);
+CREATE INDEX idx_paper_positions_symbol ON paper_positions(symbol);
+CREATE INDEX idx_paper_positions_created_at ON paper_positions(created_at DESC);
+
+-- Enable RLS
+ALTER TABLE paper_positions ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+CREATE POLICY "Users can view own paper positions" ON paper_positions
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own paper positions" ON paper_positions
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own paper positions" ON paper_positions
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own paper positions" ON paper_positions
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Trigger for updated_at
+CREATE TRIGGER update_paper_positions_updated_at
+  BEFORE UPDATE ON paper_positions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
 -- TRADE CASH FLOWS TABLE (for XIRR calculation)
 -- ============================================
 CREATE TABLE trade_cash_flows (
@@ -198,15 +290,8 @@ CREATE POLICY "Users can insert own snapshots" ON capital_snapshots
 
 -- ============================================
 -- TRIGGERS FOR UPDATED_AT
+-- (function already defined at top of file)
 -- ============================================
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ language 'plpgsql';
-
 CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON user_profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -278,3 +363,33 @@ BEGIN
   WHERE up.user_id = p_user_id;
 END;
 $$ LANGUAGE plpgsql;
+-- ============================================
+-- AUTO-CREATE USER PROFILE ON SIGNUP
+-- ============================================
+-- This trigger creates a default user_profiles row whenever a new
+-- auth.users row is inserted. It is idempotent — if the client also
+-- inserts a profile (e.g. during signup), the ON CONFLICT clause
+-- skips the duplicate.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.user_profiles (user_id, email, full_name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NULL)
+  )
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();

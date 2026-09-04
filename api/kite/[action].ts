@@ -158,6 +158,7 @@ async function handleToken(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       userId: user_id,
+      access_token,
       expiresAt: expiresAt.toISOString(),
     });
   } catch (error: any) {

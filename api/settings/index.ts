@@ -39,6 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'paper_trading_enabled',
         'paper_trading_capital',
         'full_name',
+        'zerodha_api_key',
+        'zerodha_api_secret',
       ];
 
       const sanitized: Record<string, any> = {};
