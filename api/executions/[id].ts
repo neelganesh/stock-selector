@@ -1,14 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
-import { requireAuth } from '../kite/client';
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { requireAuth, UnauthorizedError } from '../kite/_client';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { user, supabase: userSupabase } = await requireAuth(req);
+  let auth;
+  try {
+    auth = await requireAuth(req);
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    throw err;
+  }
+  const { user, supabase: userSupabase } = auth;
   const { id } = req.query;
 
   if (!id || typeof id !== 'string') {

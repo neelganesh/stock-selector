@@ -1,12 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 const KITE_API_BASE = 'https://api.kite.trade';
 const KITE_LOGIN_URL = 'https://kite.zerodha.com/connect/login';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
+// Service-role client for trusted backend operations (token verification, profile lookups)
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
@@ -17,8 +18,14 @@ interface KiteCredentials {
   userId?: string;
 }
 
+export interface AuthContext {
+  user: { id: string; email?: string };
+  supabase: SupabaseClient;
+  credentials: KiteCredentials | null;
+}
+
 async function getUserKiteCredentials(userId: string): Promise<KiteCredentials | null> {
-  const { data: profile } = await supabase
+  const { data: profile } = await supabaseAdmin
     .from('user_profiles')
     .select('zerodha_api_key, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
     .eq('user_id', userId)
@@ -27,7 +34,7 @@ async function getUserKiteCredentials(userId: string): Promise<KiteCredentials |
   if (!profile?.zerodha_api_key) return null;
 
   // Check if access token is expired (expires at 6 AM next day)
-  const isExpired = profile.zerodha_access_token_expires_at 
+  const isExpired = profile.zerodha_access_token_expires_at
     ? new Date(profile.zerodha_access_token_expires_at) < new Date()
     : true;
 
@@ -77,25 +84,50 @@ async function kiteRequest(
   return data;
 }
 
-export async function requireAuth(req: VercelRequest): Promise<{ userId: string; credentials: KiteCredentials } | null> {
+/**
+ * Authenticate a request using a Supabase Bearer token.
+ *
+ * Throws `Unauthorized` if the token is missing or invalid.
+ * Returns the authenticated user, a per-request Supabase client (with the
+ * user's JWT so RLS policies apply), and any stored Zerodha credentials.
+ *
+ * Callers should catch `Unauthorized` and respond with 401.
+ */
+export async function requireAuth(req: VercelRequest): Promise<AuthContext> {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    return null;
+    throw new UnauthorizedError('Missing Authorization header');
   }
 
   const token = authHeader.slice(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
   if (error || !user) {
-    return null;
+    throw new UnauthorizedError('Invalid or expired session');
   }
+
+  // Build a per-request Supabase client that forwards the user's JWT.
+  // Queries through this client respect RLS as the authenticated user.
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY!;
+  const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
 
   const credentials = await getUserKiteCredentials(user.id);
-  if (!credentials) {
-    return null;
-  }
 
-  return { userId: user.id, credentials };
+  return {
+    user: { id: user.id, email: user.email },
+    supabase: userSupabase,
+    credentials,
+  };
 }
 
-export { KITE_API_BASE, KITE_LOGIN_URL, kiteRequest, generateChecksum, getUserKiteCredentials };
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+export { KITE_API_BASE, KITE_LOGIN_URL, kiteRequest, generateChecksum, getUserKiteCredentials, supabaseAdmin };
