@@ -14,6 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { user, supabase: userSupabase } = auth;
 
+  try {
     if (req.method === 'GET') {
       const { data, error } = await userSupabase
         .from('user_profiles')

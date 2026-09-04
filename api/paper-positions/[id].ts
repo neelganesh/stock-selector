@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../../kite/_client.js';
+import { requireAuth, UnauthorizedError } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
@@ -19,6 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const { user, supabase: userSupabase } = auth;
 
+  try {
     if (req.method === 'PATCH') {
       const { status, exit_filled_price, exit_filled_at, notes, tags } = req.body;
 

@@ -51,6 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const { user, supabase: userSupabase } = auth;
 
+  try {
     // 1. Fetch all open/pending executions from local DB
     const { data: executions, error: execError } = await userSupabase
       .from('strategy_executions')
