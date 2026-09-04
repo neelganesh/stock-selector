@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError } from '../kite/_client';
+import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError } from '../kite/_client.js';
 
 interface KiteOrder {
   order_id: string;

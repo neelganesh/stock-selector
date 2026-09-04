@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client';
+import { requireAuth, UnauthorizedError } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;

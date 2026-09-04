@@ -29,7 +29,7 @@ import {
   generateChecksum,
   getUserKiteCredentials,
   UnauthorizedError,
-} from './_client';
+} from './_client.js';
 
 const supabaseAdmin = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!,
