@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './GlassCard';
 import { useTheme } from '../hooks/useTheme';
 import type { ThemeMode } from '../hooks/useTheme';
+import { useAuth } from './AuthProvider';
 
 interface UserSettings {
   total_capital: number;
@@ -35,10 +36,12 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]['id'];
 
 export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [draft, setDraft] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('capital');
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -60,13 +63,16 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   ];
 
   const fetchSettings = async () => {
-    if (!isLoggedIn) {
+    if (!isLoggedIn || !user) {
       setSettings(null);
       setIsLoading(false);
       return;
     }
     try {
-      const response = await fetch('/api/settings');
+      const token = await user.getIdToken();
+      const response = await fetch('/api/settings', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!response.ok) throw new Error('Failed to fetch settings');
       const data = await response.json();
       setSettings(data);
@@ -83,34 +89,93 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   }, [isLoggedIn]);
 
   const handleSave = async () => {
-    if (!draft) return;
+    if (!draft || !user) return;
     setIsSaving(true);
     setSaveMessage(null);
     try {
+      const token = await user.getIdToken();
       const response = await fetch('/api/settings', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(draft),
       });
-      if (!response.ok) throw new Error('Save failed');
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Save failed');
+      }
       const data = await response.json();
       setSettings(data);
       setDraft(data);
       setSaveMessage({ type: 'success', text: 'Settings saved' });
       setTimeout(() => setSaveMessage(null), 3000);
-    } catch (err) {
-      setSaveMessage({ type: 'error', text: 'Failed to save settings' });
+    } catch (err: any) {
+      setSaveMessage({ type: 'error', text: err.message || 'Failed to save settings' });
     } finally {
       setIsSaving(false);
     }
   };
 
+  /**
+   * Auto-save credentials + redirect to Zerodha OAuth in one step.
+   * Why: previously the user had to click "Save Credentials" and then
+   * "Login to Zerodha" separately. If they forgot Save, the Login button
+   * would redirect but the backend would have no api_secret to exchange
+   * the request_token later, leading to a confusing 400.
+   */
+  const handleSaveAndLogin = async () => {
+    if (!draft?.zerodha_api_key?.trim() || !draft?.zerodha_api_secret?.trim()) {
+      setSaveMessage({ type: 'error', text: 'Enter both API Key and API Secret' });
+      setActiveSection('kite');
+      return;
+    }
+    if (!user) {
+      setSaveMessage({ type: 'error', text: 'Please sign in first' });
+      return;
+    }
+    setIsLoggingIn(true);
+    setSaveMessage(null);
+    try {
+      const token = await user.getIdToken();
+      // Persist the credentials to the backend first so the OAuth callback
+      // can use them to exchange the request_token for an access_token.
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          zerodha_api_key: draft.zerodha_api_key.trim(),
+          zerodha_api_secret: draft.zerodha_api_secret.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save credentials');
+      }
+      // Now redirect to Zerodha's OAuth page.
+      const apiKey = draft.zerodha_api_key.trim();
+      window.location.href = `https://kite.zerodha.com/connect/login?v=3&api_key=${encodeURIComponent(apiKey)}`;
+    } catch (err: any) {
+      setIsLoggingIn(false);
+      setSaveMessage({ type: 'error', text: err.message || 'Failed to start Zerodha login' });
+    }
+  };
+
   const handleResetPaper = async () => {
     if (!confirm('Reset paper trading portfolio? This cancels all open paper positions.')) return;
+    if (!user) return;
     try {
+      const token = await user.getIdToken();
       const response = await fetch('/api/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ action: 'reset_paper_portfolio' }),
       });
       if (!response.ok) throw new Error('Reset failed');
@@ -252,6 +317,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
               updateDraft={updateDraft}
               handleSave={handleSave}
               isSaving={isSaving}
+              handleSaveAndLogin={handleSaveAndLogin}
+              isLoggingIn={isLoggingIn}
             />
           )}
           {activeSection === 'appearance' && (
@@ -463,6 +530,8 @@ function KiteSettings({
   updateDraft,
   handleSave,
   isSaving,
+  handleSaveAndLogin,
+  isLoggingIn,
 }: {
   apiKey?: string | null;
   expiresAt?: string | null;
@@ -470,6 +539,8 @@ function KiteSettings({
   updateDraft: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
   handleSave: () => void;
   isSaving: boolean;
+  handleSaveAndLogin: () => void;
+  isLoggingIn: boolean;
 }) {
   const isConnected = !!apiKey;
   const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
@@ -535,7 +606,7 @@ function KiteSettings({
 
       <div>
         <label className="block text-xs font-bold text-slate-700 mb-1">
-          Kite API Secret
+          Kite API Secret <span className="text-rose-500">*</span>
         </label>
         <input
           type="password"
@@ -546,13 +617,22 @@ function KiteSettings({
         />
       </div>
 
-      <button
-        onClick={handleSave}
-        disabled={isSaving}
-        className="w-full px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 transition-colors"
-      >
-        {isSaving ? 'Saving…' : 'Save Credentials'}
-      </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors"
+        >
+          {isSaving ? 'Saving…' : 'Save Credentials'}
+        </button>
+        <button
+          onClick={handleSaveAndLogin}
+          disabled={isLoggingIn || !draft?.zerodha_api_key?.trim() || !draft?.zerodha_api_secret?.trim()}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+        >
+          {isLoggingIn ? 'Redirecting…' : 'Save & Login to Zerodha'}
+        </button>
+      </div>
 
       <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800">
         <strong>ℹ️</strong> Get your API key + secret from{' '}

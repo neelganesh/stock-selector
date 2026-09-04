@@ -271,7 +271,7 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Kite API Secret (Optional)
+                  Kite API Secret <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="password"
