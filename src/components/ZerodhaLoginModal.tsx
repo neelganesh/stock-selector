@@ -259,154 +259,176 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
             className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
           />
 
-          {/* Modal Container */}
+          {/* Modal Container — Apple system sheet */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="relative w-full max-w-lg bg-white/85 backdrop-blur-xl border border-white/80 rounded-3xl shadow-2xl overflow-hidden text-slate-800 p-6 sm:p-8 space-y-6"
+            exit={{ opacity: 0, scale: 0.97, y: 4 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            className="relative w-full max-w-[440px] bg-white/90 backdrop-blur-2xl border border-white/80 rounded-[20px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.18)] overflow-hidden text-slate-900 font-sans"
             data-modal-panel
           >
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="absolute top-5 right-5 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            {/* Header */}
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-orange-600/30">
-                K
-              </div>
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                  Zerodha Kite API Settings
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Connect your Zerodha Connect API credentials or auto-login
-                </p>
-              </div>
+            {/* Drag handle for sheet affordance */}
+            <div className="pt-2.5 flex justify-center sm:hidden">
+              <div className="w-9 h-[5px] rounded-full bg-slate-300/80" />
             </div>
 
-            {/* Status Alert Banner */}
-            {statusMessage && (
-              <div
-                className={`p-3.5 rounded-2xl border text-xs font-medium leading-relaxed flex items-start gap-2.5 ${
-                  statusType === 'success'
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                    : statusType === 'warning'
-                    ? 'bg-amber-50 text-amber-900 border-amber-200'
-                    : statusType === 'error'
-                    ? 'bg-rose-50 text-rose-900 border-rose-200'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
-                }`}
+            {/* Header — centered, Apple style */}
+            <div className="px-7 pt-7 pb-5 text-center relative">
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="absolute top-4 right-4 w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100/80 transition-colors flex items-center justify-center"
               >
-                <div className="shrink-0 mt-0.5">
-                  {isTesting ? (
-                    <svg className="w-4 h-4 animate-spin text-slate-600" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  ) : (
-                    <span>ℹ️</span>
-                  )}
+                <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {/* Zerodha Kite mark — gradient tile */}
+              <div className="mx-auto w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-[#FF7A1A] to-[#E84A00] text-white flex items-center justify-center font-semibold text-[22px] tracking-tight shadow-[0_8px_18px_-4px_rgba(232,74,0,0.45)] mb-4">
+                K
+              </div>
+
+              <h3 className="text-[20px] font-semibold tracking-[-0.01em] text-slate-900 leading-tight">
+                Connect Zerodha Kite
+              </h3>
+              <p className="mt-1.5 text-[13px] text-slate-500 leading-snug max-w-[320px] mx-auto">
+                Link your Kite Connect API for live historical data. Falls back to yfinance automatically.
+              </p>
+            </div>
+
+            {/* Status Alert — iOS-style inline banner */}
+            {statusMessage && (
+              <div className="mx-6 mb-2">
+                <div
+                  className={`px-3.5 py-2.5 rounded-[12px] text-[12.5px] leading-snug flex items-start gap-2.5 ${
+                    statusType === 'success'
+                      ? 'bg-[#28CD41]/10 text-emerald-900'
+                      : statusType === 'warning'
+                      ? 'bg-[#FF9500]/12 text-amber-900'
+                      : statusType === 'error'
+                      ? 'bg-[#FF3B30]/10 text-rose-900'
+                      : 'bg-slate-100/80 text-slate-700'
+                  }`}
+                >
+                  <div className="shrink-0 mt-[1px]">
+                    {isTesting ? (
+                      <svg className="w-[14px] h-[14px] animate-spin text-slate-500" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    ) : statusType === 'success' ? (
+                      <svg className="w-[14px] h-[14px] text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.59 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
+                    ) : statusType === 'warning' ? (
+                      <svg className="w-[14px] h-[14px] text-amber-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                    ) : statusType === 'error' ? (
+                      <svg className="w-[14px] h-[14px] text-rose-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                    ) : (
+                      <svg className="w-[14px] h-[14px] text-slate-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+                    )}
+                  </div>
+                  <span className="flex-1">{statusMessage}</span>
                 </div>
-                <span>{statusMessage}</span>
               </div>
             )}
 
-            {/* Inputs */}
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Kite API Key <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="e.g. 8x923jklm10429"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white/70 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs"
-                />
+            {/* Input group — iOS grouped list style */}
+            <div className="px-6 pt-4 pb-5 space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <label htmlFor="kite-api-key" className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.04em]">
+                    API Key
+                  </label>
+                  <span className="text-[10px] text-rose-500 font-medium">Required</span>
+                </div>
+                <div className="rounded-[12px] border border-slate-200/80 bg-white/70 focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20 transition-all">
+                  <input
+                    id="kite-api-key"
+                    type="text"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="8x923jklm10429"
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-full px-3.5 py-2.5 bg-transparent text-[13.5px] font-mono tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Kite API Secret <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={apiSecret}
-                  onChange={(e) => setApiSecret(e.target.value)}
-                  placeholder="••••••••••••••••"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white/70 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs"
-                />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <label htmlFor="kite-api-secret" className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.04em]">
+                    API Secret
+                  </label>
+                  <span className="text-[10px] text-rose-500 font-medium">Required</span>
+                </div>
+                <div className="rounded-[12px] border border-slate-200/80 bg-white/70 focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20 transition-all">
+                  <input
+                    id="kite-api-secret"
+                    type="password"
+                    value={apiSecret}
+                    onChange={(e) => setApiSecret(e.target.value)}
+                    placeholder="••••••••••••••••"
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-full px-3.5 py-2.5 bg-transparent text-[13.5px] font-mono tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                  />
+                </div>
               </div>
 
               {requestToken && (
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Auto-Detected Request Token
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={requestToken}
-                    className="w-full px-3.5 py-2 py-2 rounded-xl border border-slate-200 bg-slate-100 font-mono text-xs text-slate-600"
-                  />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-1">
+                    <label className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.04em]">
+                      Request Token
+                    </label>
+                    <span className="text-[10px] text-emerald-600 font-medium">Auto-detected</span>
+                  </div>
+                  <div className="rounded-[12px] border border-slate-200/80 bg-slate-50/80">
+                    <input
+                      type="text"
+                      readOnly
+                      value={requestToken}
+                      className="w-full px-3.5 py-2.5 bg-transparent text-[12px] font-mono tracking-tight text-slate-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Information Notice */}
-            <div className="p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-[11px] text-slate-600 space-y-1">
-              <p className="font-semibold text-slate-800 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span>Automatic Fallback Protection:</span>
-              </p>
-              <p>
-                Zerodha requires a separate paid subscription for Historical Data API access. If no key is set or if Historical Data fails, the application automatically uses <strong>yfinance</strong> as the fallback data source.
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            {/* Footer — single primary CTA, secondary row above */}
+            <div className="px-6 pb-6 pt-1 space-y-3">
               <button
-                onClick={handleDisconnect}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors"
+                onClick={handleSaveAndLogin}
+                className="w-full h-11 rounded-[12px] text-[14px] font-semibold text-white bg-[#007AFF] hover:bg-[#0A6FE0] active:bg-[#0058B0] transition-colors flex items-center justify-center gap-1.5 shadow-[0_2px_6px_rgba(0,122,255,0.25)]"
               >
-                Clear Credentials
+                <span>Log in with Zerodha</span>
+                <svg className="w-[14px] h-[14px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
               </button>
 
-              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-                <button
-                  onClick={handleSaveCredentials}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors"
-                >
-                  Save Credentials
-                </button>
-
+              <div className="flex items-center justify-center gap-4 text-[12.5px]">
                 <button
                   onClick={handleTestConnection}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 transition-colors"
+                  className="text-[#007AFF] hover:text-[#0A6FE0] font-medium transition-colors"
                 >
-                  Test Connection
+                  Test
                 </button>
-
+                <span className="w-px h-3 bg-slate-300" />
                 <button
-                  onClick={handleSaveAndLogin}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-lg shadow-orange-600/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+                  onClick={handleSaveCredentials}
+                  className="text-[#007AFF] hover:text-[#0A6FE0] font-medium transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Login to Zerodha</span>
+                  Save
+                </button>
+                <span className="w-px h-3 bg-slate-300" />
+                <button
+                  onClick={handleDisconnect}
+                  className="text-[#FF3B30] hover:text-[#E52E24] font-medium transition-colors"
+                >
+                  Disconnect
                 </button>
               </div>
             </div>
