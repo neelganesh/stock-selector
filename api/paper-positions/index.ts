@@ -14,6 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const { user, supabase: userSupabase } = auth;
 
+    try {
       const { data, error } = await userSupabase
         .from('paper_positions')
         .select('*')
@@ -44,6 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const { user, supabase: userSupabase } = auth;
 
+  try {
     const {
       strategy_id,
       strategy_name,
