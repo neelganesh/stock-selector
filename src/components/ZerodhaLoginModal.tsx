@@ -186,7 +186,7 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
     }
   };
 
-  const handleManualSave = async () => {
+  const handleSaveCredentials = async () => {
     if (!user) return;
     setStatusType('idle');
     setStatusMessage('Saving credentials…');
@@ -213,6 +213,26 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
     } catch (err: any) {
       setStatusType('error');
       setStatusMessage(err.message || 'Failed to save credentials');
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setStatusType('idle');
+    setStatusMessage('Testing connection…');
+    const result = await testKiteSession({
+      apiKey: apiKey.trim(),
+      apiSecret: apiSecret.trim(),
+      accessToken: getKiteCredentials().accessToken,
+    });
+    if (result.connected && result.hasHistorical) {
+      setStatusType('success');
+      setStatusMessage('Zerodha Kite API Active (Live Historical Data Feed)');
+    } else if (result.connected && !result.hasHistorical) {
+      setStatusType('warning');
+      setStatusMessage('Zerodha session active, but Historical Data API subscription is absent. Falling back to yfinance.');
+    } else {
+      setStatusType('error');
+      setStatusMessage(result.message);
     }
   };
 
@@ -364,17 +384,24 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
                 Clear Credentials
               </button>
 
-              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
                 <button
-                  onClick={handleManualSave}
+                  onClick={handleSaveCredentials}
                   className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors"
+                >
+                  Save Credentials
+                </button>
+
+                <button
+                  onClick={handleTestConnection}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 transition-colors"
                 >
                   Test Connection
                 </button>
 
                 <button
                   onClick={handleSaveAndLogin}
-                  className="w-full sm:w-auto flex-1 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-lg shadow-orange-600/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-lg shadow-orange-600/25 transition-all flex items-center justify-center gap-2 active:scale-98"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
