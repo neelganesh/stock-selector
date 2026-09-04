@@ -22,6 +22,83 @@ import { SettingsPage } from './components/SettingsPage';
 import { useTheme } from './hooks/useTheme';
 import type { StockPick } from './engine/types';
 
+/**
+ * On app mount, detect a Zerodha OAuth callback in the URL
+ * (?request_token=...) and silently exchange it for an access_token
+ * via the backend. We do this at the top level (not just inside the
+ * modal) so the user lands back on the dashboard and sees a toast
+ * saying "Zerodha connected" — no re-entering credentials, no looping.
+ *
+ * If anything goes wrong (no API key/secret in DB, Kite API error),
+ * we open the modal so the user can fix the issue.
+ */
+function useZerodhaOAuthAutoExchange(
+  getAccessToken: () => Promise<string | null>,
+  onSuccess: () => void,
+  onNeedsCredentials: () => void,
+  onError: (message: string) => void
+) {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const requestToken = params.get('request_token');
+    const status = params.get('status');
+    if (!requestToken || status === 'error') return;
+
+    // Clean the URL immediately so refreshes don't re-trigger
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    // Exchange silently
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          onNeedsCredentials();
+          return;
+        }
+        const res = await fetch('/api/kite/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ requestToken }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // If credentials are missing, prompt the user via the modal
+          if (res.status === 400 && /not configured|api key/i.test(data.error || '')) {
+            onNeedsCredentials();
+            return;
+          }
+          throw new Error(data.error || `Token exchange failed (${res.status})`);
+        }
+        // Cache the access token in localStorage so the rest of the app
+        // can use it without a round trip
+        try {
+          const STORAGE_KEY = 'zerodha_kite_credentials';
+          const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              ...existing,
+              accessToken: data.access_token,
+              requestToken,
+              loginTime: new Date().toISOString(),
+            })
+          );
+        } catch {
+          /* localStorage is optional */
+        }
+        onSuccess();
+      } catch (err: any) {
+        onError(err.message || 'Failed to connect Zerodha');
+      }
+    })();
+  }, [getAccessToken, onSuccess, onNeedsCredentials, onError]);
+}
+
 function DashboardContent() {
   const {
     activeStrategy,
@@ -43,8 +120,26 @@ function DashboardContent() {
     setCustomScripList,
   } = useStrategy();
 
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, getAccessToken } = useAuth();
   const toast = useToast();
+
+  // Silently exchange request_token on mount if the URL has one
+  // (i.e. we just got redirected back from kite.zerodha.com OAuth).
+  // No UI shown to the user — just a toast on success/failure.
+  useZerodhaOAuthAutoExchange(
+    getAccessToken,
+    () => {
+      toast.success('Zerodha Connected — Live Kite API is now active.');
+      runScan();
+    },
+    () => {
+      setIsZerodhaModalOpen(true);
+      toast.warning('Enter your Zerodha API key and secret to finish connecting.');
+    },
+    (msg) => {
+      toast.error(`Zerodha connection failed: ${msg}`);
+    }
+  );
 
   const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics' | 'settings'>('signals');
   const [isCustomScripModalOpen, setIsCustomScripModalOpen] = useState(false);

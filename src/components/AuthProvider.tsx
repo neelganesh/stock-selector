@@ -10,6 +10,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** Returns the current Supabase access token, refreshing if needed. */
+  getAccessToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -111,8 +113,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) return null;
+    // getSession() can return a session with an expired token — refresh
+    // proactively so serverless /api/* calls never see a stale JWT.
+    if (data.session.expires_at && data.session.expires_at * 1000 < Date.now() + 30_000) {
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+      if (refreshErr || !refreshed.session) return null;
+      return refreshed.session.access_token;
+    }
+    return data.session.access_token;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, refreshProfile, getAccessToken }}>
       {children}
     </AuthContext.Provider>
   );

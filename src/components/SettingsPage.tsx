@@ -36,7 +36,7 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]['id'];
 
 export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
-  const { user } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [draft, setDraft] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,7 +69,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       return;
     }
     try {
-      const token = await user.getIdToken();
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
       const response = await fetch('/api/settings', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -93,7 +94,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     setIsSaving(true);
     setSaveMessage(null);
     try {
-      const token = await user.getIdToken();
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
       const response = await fetch('/api/settings', {
         method: 'PATCH',
         headers: {
@@ -138,7 +140,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     setIsLoggingIn(true);
     setSaveMessage(null);
     try {
-      const token = await user.getIdToken();
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
       // Persist the credentials to the backend first so the OAuth callback
       // can use them to exchange the request_token for an access_token.
       const res = await fetch('/api/settings', {
@@ -169,7 +172,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     if (!confirm('Reset paper trading portfolio? This cancels all open paper positions.')) return;
     if (!user) return;
     try {
-      const token = await user.getIdToken();
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
       const response = await fetch('/api/settings', {
         method: 'POST',
         headers: {

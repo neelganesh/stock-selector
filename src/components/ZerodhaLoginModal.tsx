@@ -17,7 +17,7 @@ interface ZerodhaLoginModalProps {
 }
 
 export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: ZerodhaLoginModalProps) {
-  const { user } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
   const [requestToken, setRequestToken] = useState('');
@@ -27,21 +27,62 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
 
   useEffect(() => {
     if (isOpen) {
-      // Check if URL contains request_token from redirect
-      const extractedToken = checkAndExtractRequestToken();
+      // Always pre-fill the inputs from the DB (or localStorage cache)
+      // so the user never has to re-enter credentials.
       const creds = getKiteCredentials();
-      setApiKey(creds.apiKey || '');
-      setApiSecret(creds.apiSecret || '');
-      setRequestToken(extractedToken || creds.requestToken || creds.accessToken || '');
+      if (creds.apiKey || creds.apiSecret) {
+        setApiKey(creds.apiKey || '');
+        setApiSecret(creds.apiSecret || '');
+      } else {
+        // No local cache — fetch from the backend
+        fetchCredentialsFromBackend();
+      }
 
-      if (extractedToken) {
-        // Exchange request_token for access_token via backend
-        exchangeRequestToken(extractedToken);
-      } else if (creds.requestToken || creds.apiKey) {
+      // Pick up a fresh request_token from the URL (Zerodha redirect)
+      // OR from localStorage (in case the top-level auto-exchange hasn't
+      // run yet, e.g. the modal was opened manually right after redirect).
+      const extractedToken = checkAndExtractRequestToken();
+      const refreshed = getKiteCredentials();
+      const tokenToExchange = extractedToken
+        || (refreshed.requestToken && !refreshed.accessToken
+            ? refreshed.requestToken
+            : null);
+
+      setRequestToken(extractedToken || refreshed.requestToken || refreshed.accessToken || '');
+
+      if (tokenToExchange) {
+        exchangeRequestToken(tokenToExchange);
+      } else if (refreshed.requestToken || refreshed.accessToken) {
+        verifySession(refreshed);
+      } else if (creds.apiKey) {
         verifySession(creds);
       }
     }
   }, [isOpen]);
+
+  const fetchCredentialsFromBackend = async () => {
+    if (!user) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch('/api/settings', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.zerodha_api_key || data.zerodha_api_secret) {
+        setApiKey(data.zerodha_api_key || '');
+        setApiSecret(data.zerodha_api_secret || '');
+        // Cache to localStorage so subsequent opens don't need a fetch
+        saveKiteCredentials({
+          apiKey: data.zerodha_api_key || '',
+          apiSecret: data.zerodha_api_secret || '',
+        });
+      }
+    } catch {
+      // Silent — modal just shows empty inputs
+    }
+  };
 
   const exchangeRequestToken = async (token: string) => {
     if (!user) {
@@ -53,11 +94,13 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
     setStatusMessage('Exchanging request token for access token...');
 
     try {
+      const token2 = await getAccessToken();
+      if (!token2) throw new Error('Not signed in');
       const response = await fetch('/api/kite/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await user.getIdToken())}`,
+          'Authorization': `Bearer ${token2}`,
         },
         body: JSON.stringify({ requestToken: token }),
       });
@@ -118,7 +161,8 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
     setStatusType('idle');
     setStatusMessage('Saving credentials…');
     try {
-      const token = await user.getIdToken();
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: {
@@ -147,7 +191,8 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
     setStatusType('idle');
     setStatusMessage('Saving credentials…');
     try {
-      const token = await user.getIdToken();
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
       const res = await fetch('/api/settings', {
         method: 'PATCH',
         headers: {
