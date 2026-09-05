@@ -5,22 +5,27 @@ import { Sidebar } from './components/Sidebar';
 import { MobileSidebarDrawer } from './components/MobileSidebarDrawer';
 import { MobileBodyClass } from './components/MobileBodyClass';
 import { StockCard } from './components/StockCard';
-import { GlassCard } from './components/GlassCard';
+import { ExpandableCard } from './components/ExpandableCard';
 import { ZerodhaLoginModal } from './components/ZerodhaLoginModal';
 import { SectorStrengthExplorer } from './components/SectorStrengthExplorer';
-import { PositionSizingModal } from './components/PositionSizingModal';
-import { CustomScripModal } from './components/CustomScripModal';
 import { CapitalBar } from './components/CapitalBar';
 import { ExecuteModal } from './components/ExecuteModal';
 import { ExecutionTracker } from './components/ExecutionTracker';
 import { ToastProvider } from './components/ToastProvider';
 import { useToast } from './components/useToast';
+import { MobileNav, type MobileNavTab } from './components/MobileNav';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { AuthPage } from './components/AuthPage';
 import { PnLAnalytics } from './components/PnLAnalytics';
 import { SettingsPage } from './components/SettingsPage';
+import { Pagination } from './components/Pagination';
+import { InfoTooltip } from './components/InfoTooltip';
+import { GlassCard } from './components/GlassCard';
 import { useTheme } from './hooks/useTheme';
+import { authFetch } from './lib/authFetch';
 import type { StockPick } from './engine/types';
+
+const RESULTS_PER_PAGE = 12;
 
 /**
  * On app mount, detect a Zerodha OAuth callback in the URL
@@ -117,7 +122,6 @@ function DashboardContent() {
     isZerodhaModalOpen,
     setIsZerodhaModalOpen,
     runScan,
-    setCustomScripList,
   } = useStrategy();
 
   const { user, profile, signOut, getAccessToken } = useAuth();
@@ -142,8 +146,7 @@ function DashboardContent() {
   );
 
   const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics' | 'settings'>('signals');
-  const [isCustomScripModalOpen, setIsCustomScripModalOpen] = useState(false);
-  const [selectedStockForCalc, setSelectedStockForCalc] = useState<StockPick | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [capitalData, setCapitalData] = useState<{
@@ -151,14 +154,38 @@ function DashboardContent() {
     riskLimitPct: number;
   } | null>(null);
 
-  const isLoggedIn = activeDataSource.includes('Kite');
+  const isLoggedIn = !!user;
+
+  /**
+   * User-initiated scan with toast feedback.
+   * Wraps `runScan` so the manual "Rescan Strategy" button surfaces
+   * success / failure toasts instead of failing silently. Auto-scans
+   * (on mount or strategy/cap change) stay silent to avoid toast spam.
+   */
+  const runScanWithToast = async () => {
+    if (isScanning) return;
+    try {
+      await runScan();
+      toast.success('Scan complete.');
+    } catch (err: any) {
+      toast.error(`Scan failed: ${err?.message || 'Unknown error'}`);
+    }
+  };
+
+  // Mobile bottom-nav tabs (icons are short emoji per MobileNav contract)
+  const mobileNavTabs: MobileNavTab[] = [
+    { id: 'signals', label: 'Signals', icon: '⚡' },
+    { id: 'sector-heatmap', label: 'Sectors', icon: '📊' },
+    { id: 'executions', label: 'Trades', icon: '📋' },
+    { id: 'analytics', label: 'P&L', icon: '📈' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
 
   const handleExecute = async (params: any) => {
     if (params.isPaperTrading) {
       // Paper trading - create simulated position
-      const response = await fetch('/api/paper-positions', {
+      const response = await authFetch('/api/paper-positions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           strategy_id: activeStrategy.id,
           strategy_name: activeStrategy.name,
@@ -178,7 +205,7 @@ function DashboardContent() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         throw new Error(error.error || 'Paper trade failed');
       }
 
@@ -188,29 +215,127 @@ function DashboardContent() {
       return result;
     }
 
-    // Live trading - real order flow
-    // TODO: Call /api/executions to create execution record
-    // TODO: Call /api/kite/orders to place entry order
-    // TODO: Call /api/kite/gtt to place GTT OCO
-    console.log('Execute live trade:', params);
-    // For now just simulate success
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Live trading - real order flow.
+    // 1. Create strategy_executions row (status='pending') via /api/executions
+    // 2. Place entry order on Kite via /api/kite/orders (action=orders)
+    // 3. Place OCO GTT (target + stop-loss) via /api/kite/gtt (action=gtt)
+    // Each step uses authFetch so the Supabase Bearer token is auto-injected.
+    const executionResponse = await authFetch('/api/executions', {
+      method: 'POST',
+      body: JSON.stringify({
+        strategy_id: activeStrategy.id,
+        strategy_name: activeStrategy.name,
+        symbol: params.symbol,
+        name: params.name || params.symbol,
+        sector: params.sector || 'Unknown',
+        cap_category: params.capCategory || 'large',
+        exchange: params.exchange || 'NSE',
+        entry_price: params.entryPrice,
+        stop_loss: params.stopLoss,
+        target1: params.target1,
+        target2: params.target2,
+        quantity: params.quantity,
+        product: params.product || 'CNC',
+        risk_amount: params.riskAmount,
+        risk_pct: params.riskPct,
+        charges_estimate: params.charges,
+        is_paper_trade: false,
+      }),
+    });
+    if (!executionResponse.ok) {
+      const error = await executionResponse.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to create execution record');
+    }
+    const execution = await executionResponse.json();
+    console.log('Execution record created:', execution);
+
+    const orderResponse = await authFetch('/api/kite/orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        variety: 'regular',
+        tradingsymbol: params.symbol,
+        exchange: params.exchange || 'NSE',
+        transaction_type: params.transactionType || 'BUY',
+        order_type: 'LIMIT',
+        quantity: params.quantity,
+        product: params.product || 'CNC',
+        price: params.entryPrice,
+        tag: `strategy:${activeStrategy.id}`,
+      }),
+    });
+    if (!orderResponse.ok) {
+      const error = await orderResponse.json().catch(() => ({}));
+      throw new Error(error.error || 'Kite entry order failed');
+    }
+    const order = await orderResponse.json();
+    console.log('Kite entry order placed:', order);
+
+    // OCO GTT: leg 1 = target exit (SELL LIMIT @ target1), leg 2 = stop-loss (SELL SL-M @ stopLoss)
+    const gttResponse = await authFetch('/api/kite/gtt', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'two-leg',
+        tradingsymbol: params.symbol,
+        exchange: params.exchange || 'NSE',
+        trigger_values: [params.target1, params.stopLoss],
+        last_price: params.entryPrice,
+        orders: [
+          {
+            transaction_type: 'SELL',
+            quantity: params.quantity,
+            order_type: 'LIMIT',
+            product: params.product || 'CNC',
+            price: params.target1,
+          },
+          {
+            transaction_type: 'SELL',
+            quantity: params.quantity,
+            order_type: 'SL-M',
+            product: params.product || 'CNC',
+          },
+        ],
+      }),
+    });
+    if (!gttResponse.ok) {
+      const error = await gttResponse.json().catch(() => ({}));
+      throw new Error(error.error || 'Kite GTT placement failed');
+    }
+    const gtt = await gttResponse.json();
+    console.log('Kite GTT placed:', gtt);
+
+    toast.success(
+      `Live order placed: ${params.symbol} × ${params.quantity} (order ${order.order_id ?? 'ok'})`
+    );
+    return { execution, order, gtt };
   };
 
   // Fetch capital data for execute modal
   useEffect(() => {
-    if (isLoggedIn) {
-      fetch('/api/capital')
-        .then(res => res.json())
-        .then(data => {
-          setCapitalData({
-            availableCapital: data.availableCapital,
-            riskLimitPct: data.riskLimits?.riskPerTradePct || 2,
-          });
-        })
-        .catch(console.error);
-    }
+    if (!isLoggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await authFetch('/api/capital');
+        if (!response.ok) throw new Error(`/api/capital ${response.status}`);
+        const data = await response.json();
+        if (cancelled) return;
+        setCapitalData({
+          availableCapital: data.availableCapital,
+          riskLimitPct: data.riskLimits?.riskPerTradePct || 2,
+        });
+      } catch (err) {
+        console.error('Failed to fetch capital:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isLoggedIn]);
+
+  // Reset to first page whenever the result set or sort changes shape
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, signalFilter, resultCapFilter, sortBy, picks.length, activeTab]);
 
   // Filter and sort picks based on search query, signal filter, cap category & sort selection
   const processedPicks = [...picks]
@@ -251,6 +376,14 @@ function DashboardContent() {
   const strongBuyCount = picks.filter((p) => p.signal === 'strong-buy').length;
   const buyCount = picks.filter((p) => p.signal === 'buy').length;
 
+  // Slice into pages only on the signals tab
+  const totalPages = activeTab === 'signals'
+    ? Math.max(1, Math.ceil(processedPicks.length / RESULTS_PER_PAGE))
+    : 1;
+  const pagedPicks = activeTab === 'signals'
+    ? processedPicks.slice((currentPage - 1) * RESULTS_PER_PAGE, currentPage * RESULTS_PER_PAGE)
+    : processedPicks;
+
   const avgUpside = picks.length
     ? (
         picks.reduce(
@@ -265,7 +398,7 @@ function DashboardContent() {
   const isKiteLive = activeDataSource.includes('Kite');
 
   return (
-    <div className="min-h-screen pb-12 selection:bg-slate-200 relative overflow-hidden text-slate-800">
+    <div className="min-h-screen pb-24 lg:pb-12 selection:bg-slate-200 relative overflow-hidden text-slate-800">
       {/* Background Ambient Blur Glows */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <motion.div
@@ -331,27 +464,21 @@ function DashboardContent() {
                     </button>
                   </div>
                 </div>
-                <p className="text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">
-                  {activeStrategy.description}
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium max-w-2xl inline-flex items-start gap-1.5">
+                  <span className="truncate">Zerodha-momentum swing picks, screened across the active market cap scope.</span>
+                  <InfoTooltip
+                    label="About this strategy"
+                    content={activeStrategy.description}
+                    side="bottom"
+                    size="md"
+                  />
                 </p>
               </div>
 
               <div className="flex items-center gap-2.5 shrink-0">
-                {/* Watchlist Import button */}
-                <button
-                  onClick={() => setIsCustomScripModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98"
-                >
-                  <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  <span>Import scrip.txt</span>
-                </button>
-
                 {/* Capital Bar - Top Right */}
                 <CapitalBar
-                  isLoggedIn={activeDataSource.includes('Kite')}
-                  onLoginClick={() => setIsZerodhaModalOpen(true)}
+                  isLoggedIn={isLoggedIn}
                 />
 
                 {/* User Account / Auth Button */}
@@ -392,19 +519,21 @@ function DashboardContent() {
                   </button>
                 )}
 
-                {/* Zerodha Login / Connect Button */}
+                {/* Zerodha Login / Connect Button — demoted to a quiet pill */}
                 <button
                   onClick={() => setIsZerodhaModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md shadow-orange-600/20 transition-all flex items-center gap-2 cursor-pointer active:scale-98"
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-[color:var(--text-secondary)] bg-[color:var(--elevated-1)] hover:bg-orange-50 hover:text-orange-700 border border-[color:var(--glass-border-subtle)] transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Connect Zerodha Kite for live data"
                 >
-                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  <span>Login to Zerodha</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                  <span>Connect Zerodha</span>
                 </button>
 
                 <button
-                  onClick={() => runScan()}
+                  onClick={() => runScanWithToast()}
                   disabled={isScanning}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/70 hover:bg-white text-slate-700 border border-slate-200 shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-98"
+                  aria-label={isScanning ? 'Scanning' : 'Rescan strategy'}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-primary)] border border-[color:var(--glass-border-subtle)] shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <svg
                     className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`}
@@ -424,14 +553,15 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* View Mode Navigation Switcher Tabs */}
-            <div className="flex items-center gap-2 border-b border-slate-200/80 pb-3">
+            {/* View Mode Navigation Switcher Tabs — desktop only; mobile uses bottom MobileNav.
+                Uses the design-system tokens so the nav doesn't jar against the vision-glass cards. */}
+            <div className="hidden lg:flex items-center gap-2 border-b border-[color:var(--glass-border-subtle)] pb-3">
               <button
                 onClick={() => setActiveTab('signals')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'signals'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                    ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
+                    : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
                 <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -447,8 +577,8 @@ function DashboardContent() {
                 onClick={() => setActiveTab('sector-heatmap')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'sector-heatmap'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                    ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
+                    : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
                 <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -461,8 +591,8 @@ function DashboardContent() {
                 onClick={() => setActiveTab('executions')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'executions'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                    ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
+                    : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
                 <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -475,8 +605,8 @@ function DashboardContent() {
                 onClick={() => setActiveTab('analytics')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'analytics'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                    ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
+                    : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
                 <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -489,8 +619,8 @@ function DashboardContent() {
                 onClick={() => setActiveTab('settings')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'settings'
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200'
+                    ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
+                    : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
                 <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -501,66 +631,90 @@ function DashboardContent() {
               </button>
             </div>
 
-            {/* Metrics Overview Strip */}
+            {/* Metrics Overview Strip — uses vision-glass tiles so it visually
+                matches the rest of the design system instead of bare white. */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              <div className="p-4 rounded-2xl bg-white/80 border border-slate-200/80 shadow-xs flex flex-col justify-between h-full">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
+              <GlassCard
+                variant="blob"
+                signal="neutral"
+                padding="md"
+                className="h-full"
+              >
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
                   Qualified Picks
                 </span>
-                <p className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">
+                <p className="text-2xl font-extrabold text-[color:var(--text-primary)] tracking-tight leading-none tabular-nums">
                   {picks.length}
                 </p>
-              </div>
-              <div className="p-4 rounded-2xl bg-white/80 border border-slate-200/80 shadow-xs flex flex-col justify-between h-full">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
+              </GlassCard>
+              <GlassCard
+                variant="blob"
+                signal="strong-buy"
+                padding="md"
+                className="h-full"
+              >
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
                   Strong Buy
                 </span>
-                <p className="text-2xl font-extrabold text-emerald-600 tracking-tight leading-none">
+                <p className="text-2xl font-extrabold text-[color:var(--success-green)] tracking-tight leading-none tabular-nums">
                   {strongBuyCount}
                 </p>
-              </div>
-              <div className="p-4 rounded-2xl bg-white/80 border border-slate-200/80 shadow-xs flex flex-col justify-between h-full">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
+              </GlassCard>
+              <GlassCard
+                variant="blob"
+                signal="buy"
+                padding="md"
+                className="h-full"
+              >
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
                   Buy Signals
                 </span>
-                <p className="text-2xl font-extrabold text-blue-600 tracking-tight leading-none">
+                <p className="text-2xl font-extrabold text-[color:var(--accent-blue)] tracking-tight leading-none tabular-nums">
                   {buyCount}
                 </p>
-              </div>
-              <div className="p-4 rounded-2xl bg-white/80 border border-slate-200/80 shadow-xs flex flex-col justify-between h-full">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
+              </GlassCard>
+              <GlassCard
+                variant="blob"
+                signal="strong-buy"
+                padding="md"
+                className="h-full"
+              >
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
                   Avg Target 1 Upside
                 </span>
-                <p className="text-2xl font-extrabold text-emerald-700 tracking-tight leading-none">
+                <p className="text-2xl font-extrabold text-[color:var(--success-green)] tracking-tight leading-none tabular-nums">
                   +{avgUpside}%
                 </p>
-              </div>
+              </GlassCard>
             </div>
 
-            {/* Strategy Rules Accordion Card */}
-            <GlassCard variant="default" padding="md" className="space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                  <svg className="w-3.5 h-3.5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Strategy Criteria & Rules</span>
-                </h3>
-                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+            {/* Strategy Rules Accordion Card — collapsed by default so the
+                UI stays lean; users tap the header to read the full rule set. */}
+            <ExpandableCard
+              title="Strategy Criteria & Rules"
+              defaultOpen={false}
+              icon={
+                <svg className="w-3.5 h-3.5 text-[color:var(--text-secondary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              }
+              badge={
+                <span className="text-[11px] font-bold text-[color:var(--text-secondary)] bg-[color:var(--elevated-2)] px-2.5 py-0.5 rounded-full border border-[color:var(--glass-border-subtle)]">
                   {activeStrategy.rules.length} Rules Active
                 </span>
-              </div>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-600 font-medium">
+              }
+            >
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[color:var(--text-secondary)] font-medium">
                 {activeStrategy.rules.map((rule, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50/80 transition-colors">
-                    <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-slate-200/80">
+                  <li key={idx} className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-[color:var(--glass-bg-hover)] transition-colors">
+                    <span className="w-5 h-5 rounded-full bg-[color:var(--elevated-2)] text-[color:var(--text-primary)] font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-[color:var(--glass-border-subtle)]">
                       {idx + 1}
                     </span>
                     <span className="leading-snug pt-0.5">{rule}</span>
                   </li>
                 ))}
               </ul>
-            </GlassCard>
+            </ExpandableCard>
 
             {/* Tab Body View */}
             {activeTab === 'sector-heatmap' ? (
@@ -677,26 +831,41 @@ function DashboardContent() {
                       return (
                         <>
                           {isScanning ? (
-                            <div className="space-y-4 py-8">
-                              {[1, 2, 3].map((n) => (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8">
+                              {[1, 2, 3, 4].map((n) => (
                                 <div
                                   key={n}
-                                  className="h-32 rounded-2xl vision-glass animate-pulse border border-slate-200/50"
+                                  className="h-40 rounded-2xl vision-glass animate-pulse border border-slate-200/50"
                                 />
                               ))}
                             </div>
                           ) : (
                             <AnimatePresence mode="popLayout">
-                              {processedPicks.map((stock, index) => (
-                                <StockCard
-                                  key={stock.id}
-                                  stock={stock}
-                                  index={index}
-                                  onOpenPositionCalculator={(stk) => setSelectedStockForCalc(stk)}
-                                  onOpenExecuteModal={(stk) => setSelectedStockForExecute(stk)}
-                                />
-                              ))}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {pagedPicks.map((stock, index) => (
+                                  <StockCard
+                                    key={stock.id}
+                                    stock={stock}
+                                    index={index}
+                                    onOpenExecuteModal={(stk) => setSelectedStockForExecute(stk)}
+                                  />
+                                ))}
+                              </div>
                             </AnimatePresence>
+                          )}
+
+                          {/* Pagination */}
+                          {activeTab === 'signals' && !isScanning && processedPicks.length > RESULTS_PER_PAGE && (
+                            <div className="pt-4">
+                              <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={(p) => {
+                                  setCurrentPage(p);
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                              />
+                            </div>
                           )}
 
                           {/* Empty state when no picks match */}
@@ -739,14 +908,15 @@ function DashboardContent() {
                     if (currentTab === 'executions') {
                       return (
                         <ExecutionTracker
+                          key={isLoggedIn ? 'authed' : 'guest'}
                           isLoggedIn={isLoggedIn}
-                          onLoginClick={() => setIsZerodhaModalOpen(true)}
                         />
                       );
                     }
                     if (currentTab === 'analytics') {
                       return (
                         <PnLAnalytics
+                          key={isLoggedIn ? 'authed' : 'guest'}
                           isLoggedIn={isLoggedIn}
                           onLoginClick={() => setIsZerodhaModalOpen(true)}
                         />
@@ -755,6 +925,7 @@ function DashboardContent() {
                     if (currentTab === 'settings') {
                       return (
                         <SettingsPage
+                          key={isLoggedIn ? 'authed' : 'guest'}
                           isLoggedIn={isLoggedIn}
                           onLoginClick={() => setIsAuthModalOpen(true)}
                         />
@@ -781,29 +952,19 @@ function DashboardContent() {
             </p>
           </div>
         </footer>
+
+        {/* Mobile bottom tab bar — hidden on desktop, shown on mobile */}
+        <MobileNav
+          tabs={mobileNavTabs}
+          activeTab={activeTab}
+          onChange={(id) => setActiveTab(id as typeof activeTab)}
+        />
+
         {/* Zerodha Login & Settings Modal */}
         <ZerodhaLoginModal
           isOpen={isZerodhaModalOpen}
           onClose={() => setIsZerodhaModalOpen(false)}
           onCredentialsUpdated={() => runScan()}
-        />
-
-        {/* Watchlist scrip.txt Custom Import Modal */}
-        <CustomScripModal
-          isOpen={isCustomScripModalOpen}
-          onClose={() => setIsCustomScripModalOpen(false)}
-          onImportScrips={(scrips) => {
-            setCustomScripList(scrips);
-            runScan();
-          }}
-        />
-
-        {/* Risk & Position Sizing Calculator Modal */}
-        <PositionSizingModal
-          key={selectedStockForCalc ? `calc-${selectedStockForCalc.id || selectedStockForCalc.symbol}` : 'calc-closed'}
-          isOpen={!!selectedStockForCalc}
-          stock={selectedStockForCalc}
-          onClose={() => setSelectedStockForCalc(null)}
         />
 
         {/* Execute Trade Modal */}
