@@ -398,180 +398,267 @@ function DashboardContent() {
   const isKiteLive = activeDataSource.includes('Kite');
 
   return (
-    <div className="min-h-screen pb-24 lg:pb-12 selection:bg-slate-200 relative overflow-hidden text-slate-800">
-      {/* Background Ambient Blur Glows */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <motion.div
-          className="absolute w-[650px] h-[650px] rounded-full blur-3xl opacity-30"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(14,165,233,0.2) 0%, rgba(99,102,241,0.05) 60%, transparent 80%)',
-            top: '-200px',
-            right: '-100px',
-          }}
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute w-[600px] h-[600px] rounded-full blur-3xl opacity-25"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)',
-            bottom: '-150px',
-            left: '-100px',
-          }}
-          animate={{ scale: [1, 1.15, 1] }}
-          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      </div>
+    <div className="flex flex-col min-h-screen selection:bg-slate-200 text-slate-800" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--ground)' }}>
+      {/* ===== TOP BAR (design2.md §3.1): fluid height via --topbar-h,
+           fluid internal sizes via cqi of the .kite-topbar container. ===== */}
+      <header className="kite-topbar">
+        {/* Left side — brand + strategy name */}
+        <div className="flex items-center min-w-0" style={{ gap: 'clamp(0.5rem, 2.2cqi, 1.5rem)', flex: '1 1 0%' }}>
+          <div className="flex items-center shrink-0" style={{ gap: 'clamp(0.375rem, 1.2cqi, 0.625rem)' }}>
+            <div
+              className="rounded-md flex items-center justify-center"
+              style={{
+                width: 'var(--topbar-tile)',
+                height: 'var(--topbar-tile)',
+                backgroundColor: 'var(--accent-brand)',
+              }}
+            >
+              <svg
+                width="60%"
+                height="60%"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.25}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ color: '#fff' }}
+              >
+                <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <span className="hidden 2xl:inline font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)', fontSize: 'var(--topbar-text)' }}>
+              Quant Vision
+            </span>
+          </div>
 
-      <div className="relative z-10 max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-10 xl:px-12 pt-6 sm:pt-10">
-        {/* Main 2-Column Sidebar Layout */}
-        <div className="flex flex-col lg:flex-row gap-8 items-start">
-          {/* Left Strategy Selector Sidebar */}
-          <MobileSidebarDrawer>
-            <Sidebar />
-          </MobileSidebarDrawer>
+          <div className="hidden lg:flex items-center min-w-0" style={{ gap: 'clamp(0.5rem, 1.6cqi, 1rem)', flex: '1 1 auto', minWidth: 0 }}>
+            <div style={{ height: 'var(--topbar-divider-h)', width: '1px', backgroundColor: 'var(--border-default)', flexShrink: 0 }} />
+            <span
+              className="font-medium truncate min-w-0"
+              style={{ color: 'var(--text-primary)', fontSize: 'var(--topbar-text)', flex: '1 1 0%' }}
+            >
+              {activeStrategy.name}
+            </span>
+            <span
+              className="hidden 2xl:inline-block rounded font-semibold tracking-wide whitespace-nowrap"
+              style={{
+                color: 'var(--text-secondary)',
+                backgroundColor: 'var(--ground-secondary)',
+                border: '1px solid var(--border-default)',
+                padding: 'var(--topbar-pill-py) var(--topbar-pill-px)',
+                fontSize: 'clamp(10px, 0.55cqi + 4px, 11px)',
+                flex: '0 0 auto',
+              }}
+            >
+              {capCategory.toUpperCase()} CAP
+            </span>
+          </div>
+        </div>
 
-          {/* Right Main Content */}
-          <main className="flex-1 w-full min-w-0 space-y-6">
-            {/* Header Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                    {activeStrategy.name}
-                  </h2>
-                  <span className="px-2.5 py-0.5 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300/80 rounded-full">
-                    {capCategory.toUpperCase()} CAP
-                  </span>
-                  
-                  {/* Active Data Source Notification in Top Right Area */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIsZerodhaModalOpen(true)}
-                      className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                        isKiteLive
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                          : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${isKiteLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                      <span>Data Source: <strong>{activeDataSource}</strong></span>
-                      <svg className="w-3 h-3 ml-0.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium max-w-2xl inline-flex items-start gap-1.5">
-                  <span className="truncate">Zerodha-momentum swing picks, screened across the active market cap scope.</span>
-                  <InfoTooltip
-                    label="About this strategy"
-                    content={activeStrategy.description}
-                    side="bottom"
-                    size="md"
-                  />
-                </p>
-              </div>
+        {/* Data source pill — separate topbar child so it doesn't squeeze the strategy name */}
+        <div className="flex items-center shrink-0" style={{ gap: 'clamp(0.5rem, 1.6cqi, 1rem)' }}>
+          <button
+            onClick={() => setIsZerodhaModalOpen(true)}
+            className={`flex items-center font-semibold cursor-pointer rounded-md border whitespace-nowrap ${isKiteLive ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'}`}
+            style={{
+              gap: 'clamp(0.25rem, 0.8cqi, 0.5rem)',
+              padding: 'var(--topbar-pill-py) var(--topbar-pill-px)',
+              fontSize: 'var(--topbar-text)',
+            }}
+            title="Click to configure Zerodha Kite API"
+          >
+            <span
+              className="kite-status-dot"
+              data-state={isKiteLive ? 'live' : 'fallback'}
+              style={{
+                backgroundColor: isKiteLive ? '#10b981' : '#d97706',
+                width: 'clamp(6px, 0.5cqi + 2px, 8px)',
+                height: 'clamp(6px, 0.5cqi + 2px, 8px)',
+                borderRadius: '999px',
+                flexShrink: 0,
+              }}
+            />
+            <span>{isKiteLive ? 'Kite API Live' : 'yfinance'}</span>
+          </button>
+        </div>
 
-              <div className="flex items-center gap-2.5 shrink-0">
-                {/* Capital Bar - Top Right */}
-                <CapitalBar
-                  isLoggedIn={isLoggedIn}
-                />
-
-                {/* User Account / Auth Button */}
-                {user ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200 shadow-xs">
-                      <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
-                        {(profile?.full_name || user.email || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <div className="hidden sm:block">
-                        <p className="text-[10px] font-bold text-slate-800 leading-tight max-w-[100px] truncate">
-                          {profile?.full_name || user.email?.split('@')[0]}
-                        </p>
-                        <p className="text-[9px] text-slate-400 leading-tight">
-                          {profile?.paper_trading_enabled ? 'Paper Trading' : 'Live Trading'}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => signOut()}
-                      className="px-2.5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-all cursor-pointer"
-                      title="Sign out"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setIsAuthModalOpen(true)}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98"
-                  >
-                    <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span>Sign In</span>
-                  </button>
-                )}
-
-                {/* Zerodha Login / Connect Button — demoted to a quiet pill.
-                    Hidden when Kite is already live: the data-source pill above
-                    already shows connection state and opens the same modal. */}
-                {!isKiteLive && (
-                  <button
-                    onClick={() => setIsZerodhaModalOpen(true)}
-                    className="px-3 py-2 rounded-xl text-xs font-medium text-[color:var(--text-secondary)] bg-[color:var(--elevated-1)] hover:bg-orange-50 hover:text-orange-700 border border-[color:var(--glass-border-subtle)] transition-all flex items-center gap-1.5 cursor-pointer"
-                    title="Connect Zerodha Kite for live data"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                    <span>Connect Zerodha</span>
-                  </button>
-                )}
-
+        {/* Right side — nav links + actions */}
+        <div className="flex items-center min-w-0" style={{ gap: 'clamp(0.5rem, 1.6cqi, 1rem)', flexShrink: 1 }}>
+          {/* Nav links — Kite-style horizontal list, brand colour for active */}
+          <nav
+            className="hidden md:flex items-center font-medium"
+            style={{ gap: 'clamp(0.625rem, 1.8cqi, 1.25rem)', fontSize: 'var(--topbar-text)' }}
+          >
+            {([
+              { id: 'signals', label: 'Signals' },
+              { id: 'sector-heatmap', label: 'Sectors' },
+              { id: 'executions', label: 'Trades' },
+              { id: 'analytics', label: 'P&L' },
+              { id: 'settings', label: 'Settings' },
+            ] as const).map((t) => {
+              const isActive = activeTab === t.id;
+              return (
                 <button
-                  onClick={() => runScanWithToast()}
-                  disabled={isScanning}
-                  aria-label={isScanning ? 'Scanning' : 'Rescan strategy'}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-primary)] border border-[color:var(--glass-border-subtle)] shadow-sm transition-all flex items-center gap-2 cursor-pointer active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className="cursor-pointer transition-colors"
+                  style={{
+                    color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
+                    fontWeight: isActive ? 600 : 500,
+                  }}
                 >
-                  <svg
-                    className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  <span>{isScanning ? 'Scanning...' : 'Rescan Strategy'}</span>
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Capital + User + Rescan */}
+          <div className="flex items-center" style={{ gap: 'clamp(0.375rem, 1cqi, 0.5rem)' }}>
+            <CapitalBar isLoggedIn={isLoggedIn} />
+
+            {user ? (
+              <div className="flex items-center" style={{ gap: 'clamp(0.375rem, 1cqi, 0.5rem)' }}>
+                <div
+                  className="hidden sm:flex items-center"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    fontSize: 'var(--topbar-text)',
+                    gap: 'clamp(0.25rem, 0.8cqi, 0.5rem)',
+                    padding: 'clamp(0.125rem, 0.4cqi, 0.25rem) clamp(0.375rem, 1cqi, 0.5rem)',
+                  }}
+                >
+                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {(profile?.full_name || user.email?.split('@')[0] || 'User')}
+                  </span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>
+                    {profile?.paper_trading_enabled ? 'Paper' : 'Live'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => signOut()}
+                  className="cursor-pointer"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    fontSize: 'var(--topbar-text)',
+                    padding: 'clamp(0.125rem, 0.4cqi, 0.25rem) clamp(0.375rem, 1cqi, 0.5rem)',
+                  }}
+                  title="Sign out"
+                >
+                  Sign out
                 </button>
               </div>
-            </div>
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="font-medium cursor-pointer"
+                style={{
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: '0.375rem',
+                  fontSize: 'var(--topbar-text)',
+                  padding: 'clamp(0.25rem, 0.7cqi, 0.375rem) clamp(0.625rem, 1.4cqi, 0.75rem)',
+                }}
+              >
+                Sign in
+              </button>
+            )}
 
-            {/* View Mode Navigation Switcher Tabs — desktop only; mobile uses bottom MobileNav.
-                Uses the design-system tokens so the nav doesn't jar against the vision-glass cards. */}
-            <div className="hidden lg:flex items-center gap-2 border-b border-[color:var(--glass-border-subtle)] pb-3">
+            {/* Standalone Connect-Zerodha pill — hidden when Kite is live
+                (data-source pill already shows the same state). */}
+            {!isKiteLive && (
+              <button
+                onClick={() => setIsZerodhaModalOpen(true)}
+                className="font-medium cursor-pointer hidden xl:inline-block"
+                style={{
+                  color: 'var(--accent-brand)',
+                  fontSize: 'var(--topbar-text)',
+                  padding: 'clamp(0.125rem, 0.4cqi, 0.25rem) clamp(0.375rem, 1cqi, 0.5rem)',
+                }}
+                title="Connect Zerodha Kite for live data"
+              >
+                Connect Zerodha
+              </button>
+            )}
+
+            <button
+              onClick={() => runScanWithToast()}
+              disabled={isScanning}
+              aria-label={isScanning ? 'Scanning' : 'Rescan strategy'}
+              className="kite-button-primary flex items-center"
+              style={{
+                opacity: isScanning ? 0.6 : 1,
+                cursor: isScanning ? 'not-allowed' : 'pointer',
+                gap: 'clamp(0.25rem, 0.7cqi, 0.375rem)',
+                padding: 'clamp(0.25rem, 0.7cqi, 0.375rem) clamp(0.625rem, 1.6cqi, 0.875rem)',
+                fontSize: 'var(--topbar-text)',
+              }}
+            >
+              <svg
+                className={isScanning ? 'animate-spin' : ''}
+                width="clamp(12px, 0.85cqi + 6px, 16px)"
+                height="clamp(12px, 0.85cqi + 6px, 16px)"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.25}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{isScanning ? 'Scanning...' : 'Rescan'}</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ===== BODY: 100vh - 60px, flex row, sidebar + main (no full-page scroll). ===== */}
+      <div className="kite-body">
+        {/* Left pane — Kite sidebar. On mobile, swap to a drawer. */}
+        <MobileSidebarDrawer>
+          <Sidebar />
+        </MobileSidebarDrawer>
+
+        {/* Main pane — fluid width, scrolls independently. */}
+        <main className="kite-main">
+          {/* Heading row (page title + subtitle). On mobile we show the
+              strategy name here because the top bar's strategy subtitle is
+              hidden; on desktop the top bar already shows the same, so we
+              collapse to a small subtitle to avoid duplication. */}
+          <div className="flex flex-col gap-1 mb-6">
+            <h1 className="hidden lg:block text-[13px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+              {activeStrategy.name}
+            </h1>
+            <h1 className="lg:hidden text-[22px] font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              {activeStrategy.name}
+            </h1>
+            <p className="text-[13px] flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+              <span>Zerodha-momentum swing picks, screened across the active market cap scope.</span>
+              <InfoTooltip
+                label="About this strategy"
+                content={activeStrategy.description}
+                side="bottom"
+                size="md"
+              />
+            </p>
+          </div>
+
+            {/* View-mode tabs (mobile only — desktop nav is in the top bar) */}
+            <div className="lg:hidden flex flex-wrap items-center gap-2 pb-3 mb-2 border-b" style={{ borderColor: 'var(--border-default)' }}>
               <button
                 onClick={() => setActiveTab('signals')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'signals'
                     ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
                     : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
-                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span>Swing Signals Screener</span>
+                <span>Signals</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-extrabold">
                   {picks.length}
                 </span>
@@ -579,55 +666,55 @@ function DashboardContent() {
 
               <button
                 onClick={() => setActiveTab('sector-heatmap')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'sector-heatmap'
                     ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
                     : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
-                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-indigo-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <span>Equal-Weighted Sector NAV Heatmap</span>
+                <span>Sectors</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('executions')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'executions'
                     ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
                     : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
-                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-indigo-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
-                <span>Strategy Executions</span>
+                <span>Trades</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('analytics')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'analytics'
                     ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
                     : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
-                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <span>P&L Analytics</span>
+                <span>P&amp;L</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('settings')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                   activeTab === 'settings'
                     ? 'bg-[color:var(--accent-blue)] text-white shadow-md'
                     : 'bg-[color:var(--elevated-1)] hover:bg-[color:var(--elevated-2)] text-[color:var(--text-secondary)] border border-[color:var(--glass-border-subtle)]'
                 }`}
               >
-                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -635,90 +722,93 @@ function DashboardContent() {
               </button>
             </div>
 
-            {/* Metrics Overview Strip — uses vision-glass tiles so it visually
-                matches the rest of the design system instead of bare white. */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              <GlassCard
-                variant="blob"
-                signal="neutral"
-                padding="md"
-                className="h-full"
-              >
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
-                  Qualified Picks
-                </span>
-                <p className="text-2xl font-extrabold text-[color:var(--text-primary)] tracking-tight leading-none tabular-nums">
-                  {picks.length}
-                </p>
-              </GlassCard>
-              <GlassCard
-                variant="blob"
-                signal="strong-buy"
-                padding="md"
-                className="h-full"
-              >
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
-                  Strong Buy
-                </span>
-                <p className="text-2xl font-extrabold text-[color:var(--success-green)] tracking-tight leading-none tabular-nums">
-                  {strongBuyCount}
-                </p>
-              </GlassCard>
-              <GlassCard
-                variant="blob"
-                signal="buy"
-                padding="md"
-                className="h-full"
-              >
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
-                  Buy Signals
-                </span>
-                <p className="text-2xl font-extrabold text-[color:var(--accent-blue)] tracking-tight leading-none tabular-nums">
-                  {buyCount}
-                </p>
-              </GlassCard>
-              <GlassCard
-                variant="blob"
-                signal="strong-buy"
-                padding="md"
-                className="h-full"
-              >
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] block mb-2">
-                  Avg Target 1 Upside
-                </span>
-                <p className="text-2xl font-extrabold text-[color:var(--success-green)] tracking-tight leading-none tabular-nums">
-                  +{avgUpside}%
-                </p>
-              </GlassCard>
+            {/* Metrics Overview Strip — design2.md: large, hairline-bordered tiles,
+                subtle small labels, single data colour. */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="kite-metric">
+                <p className="kite-metric-label">Qualified Picks</p>
+                <p className="kite-metric-value" style={{ color: 'var(--text-primary)' }}>{picks.length}</p>
+              </div>
+              <div className="kite-metric">
+                <p className="kite-metric-label">Strong Buy</p>
+                <p className="kite-metric-value" style={{ color: 'var(--success-green)' }}>{strongBuyCount}</p>
+              </div>
+              <div className="kite-metric">
+                <p className="kite-metric-label">Buy Signals</p>
+                <p className="kite-metric-value" style={{ color: 'var(--accent-blue)' }}>{buyCount}</p>
+              </div>
+              <div className="kite-metric">
+                <p className="kite-metric-label">Avg Target 1 Upside</p>
+                <p className="kite-metric-value" style={{ color: 'var(--success-green)' }}>+{avgUpside}%</p>
+              </div>
             </div>
 
             {/* Strategy Rules Accordion Card — collapsed by default so the
                 UI stays lean; users tap the header to read the full rule set. */}
-            <ExpandableCard
-              title="Strategy Criteria & Rules"
-              defaultOpen={false}
-              icon={
-                <svg className="w-3.5 h-3.5 text-[color:var(--text-secondary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-              badge={
-                <span className="text-[11px] font-bold text-[color:var(--text-secondary)] bg-[color:var(--elevated-2)] px-2.5 py-0.5 rounded-full border border-[color:var(--glass-border-subtle)]">
-                  {activeStrategy.rules.length} Rules Active
+            <div className="mt-3">
+              {/* Strategy pill — shows active strategy name, always visible above the card */}
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-[color:var(--accent-brand)] bg-[color:var(--accent-brand)]/10 px-2.5 py-1 rounded-full border border-[color:var(--accent-brand)]/20">
+                  {activeStrategy.shortName}
                 </span>
-              }
-            >
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[color:var(--text-secondary)] font-medium">
-                {activeStrategy.rules.map((rule, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-[color:var(--glass-bg-hover)] transition-colors">
-                    <span className="w-5 h-5 rounded-full bg-[color:var(--elevated-2)] text-[color:var(--text-primary)] font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-[color:var(--glass-border-subtle)]">
-                      {idx + 1}
-                    </span>
-                    <span className="leading-snug pt-0.5">{rule}</span>
-                  </li>
-                ))}
-              </ul>
-            </ExpandableCard>
+                <span className="text-[11px] text-[color:var(--text-quaternary)]">
+                  {activeStrategy.rules.length} rules
+                </span>
+              </div>
+
+              <ExpandableCard
+                title="Strategy Criteria & Rules"
+                defaultOpen={false}
+                icon={
+                  <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+              >
+                {/* Strategy description — shown at the top of the expanded body */}
+                {activeStrategy.description && (
+                  <p className="mb-4 text-xs leading-relaxed text-[color:var(--text-secondary)] bg-[color:var(--accent-blue-bg)] border border-[color:var(--accent-blue)]/20 px-4 py-3 rounded-xl">
+                    {activeStrategy.description}
+                  </p>
+                )}
+
+                <ul className="flex flex-col gap-2">
+                  {activeStrategy.rules.map((rule, idx) => {
+                    // Categorize rules: first is Filter, last is Risk, middle are Entry
+                    const isFirst = idx === 0;
+                    const isLast = idx === activeStrategy.rules.length - 1;
+                    const ruleCategory = isFirst ? 'Filter' : isLast ? 'Risk' : 'Entry';
+                    const chipClass =
+                      ruleCategory === 'Filter'
+                        ? 'bg-[color:var(--elevated-1)] text-[color:var(--text-tertiary)] border-[color:var(--border-subtle)]'
+                        : ruleCategory === 'Risk'
+                        ? 'bg-[color:var(--hazard-red-bg)] text-[color:var(--hazard-red)] border-[color:var(--hazard-red)]/30'
+                        : 'bg-[color:var(--accent-blue-bg)] text-[color:var(--accent-blue)] border-[color:var(--accent-blue)]/30';
+                    const numClass =
+                      ruleCategory === 'Filter'
+                        ? 'bg-[color:var(--elevated-1)] text-[color:var(--text-tertiary)]'
+                        : ruleCategory === 'Risk'
+                        ? 'bg-[color:var(--hazard-red-bg)] text-[color:var(--hazard-red)]'
+                        : 'bg-[color:var(--accent-blue-bg)] text-[color:var(--accent-blue)]';
+
+                    return (
+                      <li key={idx} className="flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-[color:var(--elevated-1)] transition-colors">
+                        {/* Category chip */}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 mt-0.5 uppercase tracking-wide ${chipClass}`}>
+                          {ruleCategory}
+                        </span>
+                        {/* Number circle */}
+                        <span className={`w-5 h-5 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 ${numClass}`}>
+                          {idx + 1}
+                        </span>
+                        {/* Rule text */}
+                        <span className="text-sm leading-snug text-[color:var(--text-secondary)] flex-1">{rule}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </ExpandableCard>
+            </div>
 
             {/* Tab Body View */}
             {activeTab === 'sector-heatmap' ? (
@@ -726,11 +816,11 @@ function DashboardContent() {
             ) : (
               <>
                 {/* Filters & Search Control Bar (Zerodha Kite Style) */}
-                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2">
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-4 mt-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* Result Market Cap Category Filter Pills */}
-                    <div className="flex items-center gap-1 p-1 rounded-xl vision-glass border border-slate-200/60 text-xs">
-                      <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Cap:</span>
+                    {/* Cap Filter Pills — design2.md: hairline pills, brand accent for active. */}
+                    <div className="flex items-center gap-1 text-[12px]">
+                      <span className="px-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Cap:</span>
                       {(
                         [
                           { id: 'all', label: 'All' },
@@ -744,11 +834,12 @@ function DashboardContent() {
                           <button
                             key={capItem.id}
                             onClick={() => setResultCapFilter(capItem.id)}
-                            className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                              isActive
-                                ? 'bg-slate-900 text-white shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                            }`}
+                            className="px-2.5 py-1 font-medium transition-colors cursor-pointer"
+                            style={{
+                              color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
+                              borderBottom: isActive ? '2px solid var(--accent-brand)' : '2px solid transparent',
+                              borderRadius: 0,
+                            }}
                           >
                             {capItem.label}
                           </button>
@@ -756,20 +847,21 @@ function DashboardContent() {
                       })}
                     </div>
 
-                    {/* Signal Filter Pills */}
-                    <div className="flex items-center gap-1 p-1 rounded-xl vision-glass border border-slate-200/60 text-xs">
-                      <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Signal:</span>
+                    {/* Signal Filter Pills — same hairline underline style. */}
+                    <div className="flex items-center gap-1 text-[12px]">
+                      <span className="px-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Signal:</span>
                       {(['all', 'strong-buy', 'buy', 'hold'] as const).map((filter) => {
                         const isActive = signalFilter === filter;
                         return (
                           <button
                             key={filter}
                             onClick={() => setSignalFilter(filter)}
-                            className={`px-2.5 py-1 rounded-lg font-medium transition-all capitalize ${
-                              isActive
-                                ? 'bg-slate-900 text-white shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                            }`}
+                            className="px-2.5 py-1 font-medium transition-colors cursor-pointer capitalize"
+                            style={{
+                              color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
+                              borderBottom: isActive ? '2px solid var(--accent-brand)' : '2px solid transparent',
+                              borderRadius: 0,
+                            }}
                           >
                             {filter.replace('-', ' ')}
                           </button>
@@ -779,16 +871,20 @@ function DashboardContent() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* Zerodha Kite-Style Sort Selector */}
-                    <div className="relative flex items-center vision-glass border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white/70 shadow-2xs">
-                      <svg className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    {/* Sort Selector — hairline-bordered, no shadow. */}
+                    <div
+                      className="relative flex items-center px-3 py-1.5 text-[12px] font-medium"
+                      style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                    >
+                      <svg className="w-3.5 h-3.5 mr-2 shrink-0" style={{ color: 'var(--text-tertiary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
                       </svg>
-                      <span className="text-slate-400 font-medium mr-1.5">Sort:</span>
+                      <span className="font-medium mr-1.5" style={{ color: 'var(--text-tertiary)' }}>Sort:</span>
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as any)}
-                        className="bg-transparent text-slate-900 font-bold focus:outline-none cursor-pointer pr-2"
+                        className="bg-transparent font-semibold focus:outline-none cursor-pointer pr-2"
+                        style={{ color: 'var(--text-primary)' }}
                       >
                         <option value="rank">Strategy Rank (Default)</option>
                         <option value="price-desc">Price: High → Low</option>
@@ -801,17 +897,19 @@ function DashboardContent() {
                       </select>
                     </div>
 
-                    {/* Search Box */}
+                    {/* Search Box — hairline border, no glass. */}
                     <div className="relative">
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search stock or sector..."
-                        className="w-full sm:w-56 pl-9 pr-4 py-1.5 rounded-xl text-xs vision-glass border border-slate-200/80 focus:outline-none focus:ring-2 focus:ring-slate-400 placeholder:text-slate-400"
+                        className="w-full sm:w-56 pl-9 pr-4 py-1.5 text-[12px] focus:outline-none placeholder:text-[color:var(--text-tertiary)]"
+                        style={{ color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
                       />
                       <svg
-                        className="w-4 h-4 text-slate-400 absolute left-3 top-2"
+                        className="w-4 h-4 absolute left-3 top-2"
+                        style={{ color: 'var(--text-tertiary)' }}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -941,21 +1039,7 @@ function DashboardContent() {
               </>
             )}
           </main>
-        </div>
-
-        {/* Footer */}
-        <footer className="mt-16 pt-6 border-t border-slate-200/60 text-center sm:text-left">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 font-medium">
-            <p>
-              Quant Vision Screener • Wagner & Pedicelli Relative Strength Engine
-            </p>
-            <p className="flex items-center gap-1.5">
-              <span>Parallel Multi-Cap Screener</span>
-              <span>•</span>
-              <span className="text-slate-600 font-semibold">Vision OS Glass</span>
-            </p>
-          </div>
-        </footer>
+      </div>
 
         {/* Mobile bottom tab bar — hidden on desktop, shown on mobile */}
         <MobileNav
@@ -988,7 +1072,6 @@ function DashboardContent() {
         {isAuthModalOpen && (
           <AuthPage onClose={() => setIsAuthModalOpen(false)} />
         )}
-      </div>
     </div>
   );
 }

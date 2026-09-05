@@ -3,60 +3,64 @@
 /* Custom dark variant: dark: utilities apply when <html data-theme="dark"> */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/*
+  Kite-inspired minimal design system.
+
+  Source of truth: design2.md. A clean, data-heavy, hairline-bordered
+  layout that prioritises readability and strict spatial organisation.
+  No drop shadows on cards, no glass / blur / refraction, no neon accents.
+  Single brand accent (Zerodha-orange) used only for active nav and
+  primary buttons.
+
+  Light + dark share the same layout and the same semantic-data colours
+  (gain green, loss red). The only thing that changes is the surface
+  ladder and the text ladder.
+*/
+
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
 
-  --color-ground: #F2F2F7;
-  --color-ground-secondary: #E5E5EA;
-
-  --color-text-primary: #1D1D1F;
-  --color-text-secondary: #6E6E73;
-  --color-text-tertiary: #8E8E93;
-
-  --color-accent-blue: #007AFF;
-  --color-accent-blue-light: rgba(0, 122, 255, 0.1);
-  --color-success-green: #28CD41;
-  --color-success-green-light: rgba(40, 205, 65, 0.1);
-  --color-hazard-red: #FF3B30;
-  --color-hazard-red-light: rgba(255, 59, 48, 0.1);
-  --color-warning-amber: #FF9500;
-  --color-warning-amber-light: rgba(255, 149, 0, 0.1);
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-2xl: 32px;
+  --color-ground: #FFFFFF;
+  --color-ground-secondary: #FAFAFA;
 }
 
 :root {
-  --ground: #F2F2F7;
-  --ground-secondary: #E5E5EA;
+  /* Surface ladder — flat, opaque. White is the dominant canvas;
+     sidebar is the slightly off-white #FAFAFA per design2.md. */
+  --ground: #FFFFFF;
+  --ground-secondary: #FAFAFA;
 
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-bg-hover: rgba(255, 255, 255, 0.85);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --glass-border-subtle: rgba(255, 255, 255, 0.4);
-  --glass-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 2px 8px -1px rgba(0, 0, 0, 0.04);
-  --glass-shadow-hover: 0 20px 40px -10px rgba(0, 122, 255, 0.12), 0 8px 16px -2px rgba(0, 0, 0, 0.06);
+  /* Hairline tokens. design2.md says #EEEEEE / #E0E0E0; we use
+     a single token to keep the rhythm tight. */
+  --border-default: #E0E0E0;
+  --border-subtle: #EEEEEE;
+  --border-strong: #D4D4D4;
 
-  --text-primary: #1D1D1F;
-  --text-secondary: #6E6E73;
-  --text-tertiary: #8E8E93;
+  /* Text ladder — primary darker than #000 for soft contrast.
+     quaternary is the dimmest readable step, used for hairlines,
+     separators, and decorative micro-glyphs (SL/T1 ticks, dots). */
+  --text-primary: #333333;
+  --text-secondary: #888888;
+  --text-tertiary: #9CA3AF;
+  --text-quaternary: #B8BEC9;
 
-  --accent-blue: #007AFF;
-  --accent-blue-light: rgba(0, 122, 255, 0.1);
-  --success-green: #28CD41;
-  --success-green-light: rgba(40, 205, 65, 0.1);
-  --hazard-red: #FF3B30;
-  --hazard-red-light: rgba(255, 59, 48, 0.1);
-  --warning-amber: #FF9500;
-  --warning-amber-light: rgba(255, 149, 0, 0.1);
+  /* Semantic data colours — the only saturated hues on the page. */
+  --success-green: #4CAF50;
+  --success-green-bg: rgba(76, 175, 80, 0.08);
+  --hazard-red: #E53935;
+  --hazard-red-bg: rgba(229, 57, 53, 0.08);
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  /* Brand accent — used sparingly for active states and primary
+     buttons. design2.md suggests "subtle orange/red"; Zerodha's
+     own brand orange is #FF5722. */
+  --accent-brand: #FF5722;
+  --accent-brand-hover: #E64A19;
+  --accent-blue: #2196F3;
+  --accent-blue-bg: rgba(33, 150, 243, 0.08);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
 
   font-family: var(--font-sans);
   font-size: 16px;
@@ -68,31 +72,30 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dark theme — used when [data-theme="dark"] is set on <html> */
+/* Dark theme — same layout, inverted surface + text ladder. The
+   semantic data colours are punchier so they survive on dark. */
 [data-theme="dark"] {
-  --ground: #0B0B0E;
-  --ground-secondary: #15151A;
+  --ground: #0F1115;
+  --ground-secondary: #161922;
 
-  --glass-bg: rgba(28, 28, 32, 0.72);
-  --glass-bg-hover: rgba(38, 38, 44, 0.85);
-  --glass-bg-subtle: rgba(28, 28, 32, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-subtle: rgba(255, 255, 255, 0.04);
-  --glass-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 2px 8px -1px rgba(0, 0, 0, 0.3);
-  --glass-shadow-hover: 0 20px 40px -10px rgba(10, 132, 255, 0.18), 0 8px 16px -2px rgba(0, 0, 0, 0.4);
+  --border-default: #2A2E38;
+  --border-subtle: #1F222A;
+  --border-strong: #353A45;
 
-  --text-primary: #F5F5F7;
-  --text-secondary: #A1A1A6;
-  --text-tertiary: #6E6E73;
+  --text-primary: #E8EAED;
+  --text-secondary: #9CA3AF;
+  --text-tertiary: #6B7280;
+  --text-quaternary: #4B5563;
 
-  --accent-blue: #0A84FF;
-  --accent-blue-light: rgba(10, 132, 255, 0.18);
-  --success-green: #30D158;
-  --success-green-light: rgba(48, 209, 88, 0.16);
-  --hazard-red: #FF453A;
-  --hazard-red-light: rgba(255, 69, 58, 0.16);
-  --warning-amber: #FF9F0A;
-  --warning-amber-light: rgba(255, 159, 10, 0.16);
+  --success-green: #26C281;
+  --success-green-bg: rgba(38, 194, 129, 0.14);
+  --hazard-red: #EF5350;
+  --hazard-red-bg: rgba(239, 83, 80, 0.14);
+
+  --accent-brand: #FF7043;
+  --accent-brand-hover: #FF5722;
+  --accent-blue: #42A5F5;
+  --accent-blue-bg: rgba(66, 165, 245, 0.14);
 
   color: var(--text-primary);
   background: var(--ground);
@@ -100,63 +103,56 @@
 }
 
 body {
+  margin: 0;
   min-height: 100vh;
-  min-height: 100dvh;
-  background-color: #F2F2F7;
-  background-image:
-    radial-gradient(at 0% 0%, rgba(0, 122, 255, 0.12) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(52, 199, 89, 0.1) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(255, 149, 0, 0.08) 0px, transparent 50%);
-  background-attachment: fixed;
+  background-color: var(--ground);
+  font-family: var(--font-sans);
+  color: var(--text-primary);
 }
 
-/* Dark-mode body background */
-[data-theme="dark"] body {
-  background-color: #0B0B0E;
-  background-image:
-    radial-gradient(at 0% 0%, rgba(10, 132, 255, 0.10) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(48, 209, 88, 0.08) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(255, 159, 10, 0.06) 0px, transparent 50%);
-}
-
-/* Glass panel classes — use CSS variables for theme-aware colors */
+/*
+  ---------------------------------------------------------------------------
+  Legacy / vision-glass aliases
+  ---------------------------------------------------------------------------
+  Components still reference `.vision-glass`, `.vision-glass-hover`,
+  `.vision-glass-subtle` (and tests check them). We preserve those names
+  but redefine them as the Kite-minimal material: a flat opaque surface
+  with a 1px hairline border, no blur, no shadow.
+*/
 .vision-glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  background-color: var(--ground);
+  border: 1px solid var(--border-default);
 }
 
 .vision-glass-hover {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .vision-glass-hover:hover {
-  background: var(--glass-bg-hover);
-  border-color: var(--glass-border);
-  box-shadow: var(--glass-shadow-hover);
-  transform: translateY(-2px);
+  background-color: var(--ground-secondary);
+  border-color: var(--border-strong);
 }
 
 .vision-glass-subtle {
-  background: var(--glass-bg-subtle);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  border: 1px solid var(--glass-border-subtle);
+  background-color: var(--ground-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
-/* Typography Helpers */
+/*
+  ---------------------------------------------------------------------------
+  Typography helpers (kept — tests / components reference these)
+  ---------------------------------------------------------------------------
+*/
 .text-display {
   font-size: 2.25rem;
-  font-weight: 700;
+  font-weight: 300;
   letter-spacing: -0.035em;
   line-height: 1.15;
 }
 
 .text-title-1 {
   font-size: 1.625rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: -0.025em;
   line-height: 1.2;
 }
@@ -206,7 +202,11 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* Custom Scrollbar */
+/*
+  ---------------------------------------------------------------------------
+  Scrollbar — flat, narrow, theme-aware.
+  ---------------------------------------------------------------------------
+*/
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -215,16 +215,358 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--glass-border-subtle);
+  background: var(--border-strong);
   border-radius: 999px;
 }
 
+/*
+  ---------------------------------------------------------------------------
+  Fluid scale tokens — the "big tech" pattern.
 
-/* ------------------------------------------------------------------
-   Mobile full-screen modal: when body has the .is-mobile class, any
-   element marked with [data-modal-panel] becomes a full-screen
-   bottom-sheet/cover so modals feel native on phones.
-   ------------------------------------------------------------------ */
+  Every layout value the top-level chrome uses (top bar height, sidebar
+  width, main padding, internal top-bar gap, brand tile size, divider
+  height, icon sizes inside the top bar) is expressed as `clamp(min,
+  fluid, max)` so the chrome looks right at every viewport width without
+  per-resolution testing.
+
+  Fluid function: linearly interpolate between (640px, min) and (1440px,
+  max). The "sweet spot" we tune for is ~1280px (most laptop screens).
+  The body keeps a 1280px sweet spot because the top bar contains
+  wordmarks, pills, and a horizontal nav that need to fit on a single
+  line from ~900px upward; below that we switch to mobile layout (see
+  MobileSidebarDrawer / MobileViewTabs).
+  ---------------------------------------------------------------------------
+*/
+:root {
+  /* Top bar — height and horizontal padding scale with viewport. */
+  --topbar-h: clamp(52px, 4.4vw + 12px, 68px);
+  --topbar-px: clamp(12px, 2.4vw - 4px, 28px);
+  --topbar-gap: clamp(12px, 1.8vw, 24px);
+
+  /* Brand tile + dividers inside the top bar. */
+  --topbar-tile: clamp(24px, 1.6vw + 8px, 32px);
+  --topbar-divider-h: clamp(16px, 1.2vw + 6px, 22px);
+
+  /* Sidebar — slim down on narrow laptops, expand on ultrawide. */
+  --sidebar-w: clamp(220px, 22vw, 340px);
+
+  /* Main content area — scales padding with viewport. */
+  --main-px: clamp(16px, 3.2vw, 40px);
+  --main-py: clamp(20px, 2.4vw, 32px);
+
+  /* Icon sizes inside top bar — proportional to the bar's own height. */
+  --topbar-icon: clamp(14px, 0.85vw + 8px, 18px);
+  --topbar-pill-px: clamp(6px, 0.6vw + 2px, 10px);
+  --topbar-pill-py: clamp(1px, 0.18vw, 3px);
+  --topbar-text: clamp(12px, 0.7vw + 6px, 14px);
+
+  /*
+    Card design system — the holistic card architecture.
+
+    Every surface in the app that displays a unit of information
+    (ExpandableCard, StockCard, sector card, execution row, etc.)
+    uses these tokens so cards feel like one family, not 12 different
+    patterns. Tokens are viewport-clamped (clamps) plus container-
+    query-interpolated (cqi) where appropriate. Per Apple HIG, M3,
+    and Stripe/Linear conventions: hairline 1px border, 14px radius,
+    16/20/24px padding scale, 1.5 line-height.
+  */
+  --card-radius: 14px;
+  --card-border: 1px solid var(--border-default);
+  --card-bg: var(--ground);
+  --card-bg-hover: var(--ground-secondary);
+  --card-divider: var(--border-subtle);
+
+  /* Card header — fixed 48px min so the icon row has a stable baseline. */
+  --card-header-h: clamp(44px, 4cqi + 12px, 56px);
+  --card-header-px: clamp(0.875rem, 3.2cqi, 1.25rem);
+
+  /* Card body — generous padding so text never touches edges. */
+  --card-body-px: clamp(1rem, 3.6cqi, 1.5rem);
+  --card-body-py: clamp(0.875rem, 2.8cqi, 1.25rem);
+
+  /* Card header icon — sit on the row's vertical center, no box. */
+  --card-icon-size: clamp(16px, 1.6cqi, 22px);
+
+  /* Card title — scales with the card itself, never touches edges. */
+  --card-title-size: clamp(0.8125rem, 1.6cqi, 0.9375rem);
+
+  /* Card body text — comfortable scan line. */
+  --card-body-size: clamp(0.8125rem, 1.5cqi, 0.875rem);
+  --card-body-lh: 1.5;
+
+  /* Card gap between sections inside a card body. */
+  --card-section-gap: clamp(0.625rem, 2.4cqi, 1rem);
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Layout skeleton — design2.md: strict 100vh, no full-page scroll.
+  Top bar + sidebar use the fluid tokens above; main pane is fluid.
+  ---------------------------------------------------------------------------
+*/
+.kite-topbar {
+  height: var(--topbar-h);
+  padding: 0 var(--topbar-px);
+  gap: var(--topbar-gap);
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--ground);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  /* The top bar is itself a container so child elements (brand tile,
+     pills, text) can size relative to *its* width using `cqi`. */
+  container-type: inline-size;
+  container-name: topbar;
+}
+
+.kite-body {
+  display: flex;
+  height: calc(100vh - var(--topbar-h));
+  overflow: hidden;
+}
+
+.kite-sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-default);
+  background-color: var(--ground-secondary);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.kite-sidebar-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.kite-main {
+  flex: 1;
+  background-color: var(--ground);
+  overflow-y: auto;
+  padding: var(--main-py) var(--main-px);
+  min-width: 0;
+  /* The main pane is also a container so cards / headers inside
+     it scale relative to the available width, not the viewport. */
+  container-type: inline-size;
+  container-name: main;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  List rows — the dominant surface element. Two-line row, hover darkens.
+  Used by strategy selector, stock picks, watchlist, etc.
+  ---------------------------------------------------------------------------
+*/
+.kite-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color 0.12s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.kite-list-row:hover {
+  background-color: var(--ground);
+}
+
+.kite-list-row[data-active="true"] {
+  background-color: var(--ground);
+  border-left: 2px solid var(--accent-brand);
+  padding-left: 14px;
+}
+
+.kite-list-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.kite-list-row-meta {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.kite-list-row-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Metric tiles — used for the dashboard's primary numbers.
+  design2.md: large prominent numbers, subtle small labels.
+  ---------------------------------------------------------------------------
+*/
+.kite-metric {
+  padding: 20px 24px;
+  border: 1px solid var(--border-default);
+  background-color: var(--ground);
+}
+
+.kite-metric-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 8px;
+}
+
+.kite-metric-value {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Section card — used for grouped content inside main area.
+  Hairline border, generous padding, no shadow.
+
+  Cards are themselves a container so the same .kite-card dropped into
+  a 240px sidebar or a 480px feature slot scales identically.
+  ---------------------------------------------------------------------------
+*/
+.kite-card {
+  background-color: var(--card-bg);
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  container-type: inline-size;
+  container-name: card;
+}
+
+.kite-card-header {
+  /* Header height adapts to the card's own width via cqi. */
+  display: flex;
+  align-items: center;
+  gap: clamp(0.5rem, 1.8cqi, 0.75rem);
+  min-height: var(--card-header-h);
+  padding: clamp(0.5rem, 1.6cqi, 0.75rem) var(--card-header-px);
+  border-bottom: 1px solid var(--card-divider);
+}
+
+.kite-card-title {
+  /* Never set a fixed pixel size — title scales with the card. */
+  font-size: var(--card-title-size);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.kite-card-subtitle {
+  font-size: clamp(0.6875rem, 1.2cqi, 0.75rem);
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.kite-card-body {
+  padding: var(--card-body-py) var(--card-body-px);
+  font-size: var(--card-body-size);
+  line-height: var(--card-body-lh);
+  color: var(--text-primary);
+}
+
+/* Card header icon — sit on the row's vertical center, no box. */
+.kite-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--card-icon-size);
+  height: var(--card-icon-size);
+  color: var(--text-secondary);
+}
+
+/* Card divider — single hairline between header and body. */
+.kite-card + .kite-card,
+.kite-card-header + .kite-card-body {
+  border-top: 0;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Buttons — design2.md nav links / actions.
+  Primary uses brand accent sparingly; secondary is muted.
+  ---------------------------------------------------------------------------
+*/
+.kite-button-primary {
+  background-color: var(--accent-brand);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.kite-button-primary:hover {
+  background-color: var(--accent-brand-hover);
+}
+
+.kite-button-secondary {
+  background-color: var(--ground);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.kite-button-secondary:hover {
+  background-color: var(--ground-secondary);
+  border-color: var(--border-strong);
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Status dot — for Kite-live / yfinance badge in the top bar.
+  ---------------------------------------------------------------------------
+*/
+.kite-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.kite-status-dot[data-state="live"] {
+  background-color: var(--success-green);
+}
+
+.kite-status-dot[data-state="fallback"] {
+  background-color: var(--hazard-red);
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Mobile full-screen modal: when body has the .is-mobile class, any
+  element marked with [data-modal-panel] becomes a full-screen
+  bottom-sheet/cover so modals feel native on phones.
+  ---------------------------------------------------------------------------
+*/
 body.is-mobile [data-modal-panel] {
   border-radius: 0 !important;
   width: 100vw !important;
@@ -235,45 +577,114 @@ body.is-mobile [data-modal-panel] {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* ------------------------------------------------------------------
-   Dark-mode-aware base colors. Tailwind 4 lets us use @layer base to
-   make utility classes theme-aware via :where([data-theme="dark"]).
-   This complements the dark: variant defined at the top.
-   ------------------------------------------------------------------ */
+/*
+  ---------------------------------------------------------------------------
+  Dark-mode-aware base colors. Tailwind 4 lets us use @layer base to
+  make utility classes theme-aware via :where([data-theme="dark"]).
+  ---------------------------------------------------------------------------
+*/
 @layer utilities {
   [data-theme="dark"] .vision-glass {
-    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 2px 8px -1px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    border-color: var(--border-default);
   }
+
+  /* Text — primary / secondary / tertiary ladder. */
   [data-theme="dark"] .text-slate-900 { color: var(--text-primary); }
   [data-theme="dark"] .text-slate-800 { color: var(--text-primary); }
   [data-theme="dark"] .text-slate-700 { color: var(--text-primary); }
   [data-theme="dark"] .text-slate-600 { color: var(--text-secondary); }
   [data-theme="dark"] .text-slate-500 { color: var(--text-secondary); }
   [data-theme="dark"] .text-slate-400 { color: var(--text-tertiary); }
-  [data-theme="dark"] .border-slate-200 { border-color: var(--glass-border-subtle); }
-  [data-theme="dark"] .border-slate-200\/60 { border-color: var(--glass-border-subtle); }
-  [data-theme="dark"] .border-slate-200\/80 { border-color: var(--glass-border-subtle); }
-  [data-theme="dark"] .border-slate-300 { border-color: var(--glass-border); }
-  [data-theme="dark"] .border-white\/60 { border-color: var(--glass-border); }
-  [data-theme="dark"] .border-white\/80 { border-color: var(--glass-border); }
-  [data-theme="dark"] .bg-white { background-color: var(--glass-bg); }
-  [data-theme="dark"] .bg-white\/60 { background-color: var(--glass-bg-subtle); }
-  [data-theme="dark"] .bg-white\/72 { background-color: var(--glass-bg); }
-  [data-theme="dark"] .bg-white\/80 { background-color: var(--glass-bg); }
-  [data-theme="dark"] .bg-white\/85 { background-color: var(--glass-bg); }
-  [data-theme="dark"] .bg-white\/95 { background-color: var(--glass-bg); }
-  [data-theme="dark"] .bg-slate-50 { background-color: var(--glass-bg-subtle); }
-  [data-theme="dark"] .bg-slate-100 { background-color: var(--glass-bg-subtle); }
-  [data-theme="dark"] .bg-slate-200\/50 { background-color: var(--glass-border-subtle); }
+  [data-theme="dark"] .text-slate-300 { color: var(--text-tertiary); }
+
+  /* Borders — flat hairlines, not glass alpha. */
+  [data-theme="dark"] .border-slate-200    { border-color: var(--border-default); }
+  [data-theme="dark"] .border-slate-200\/60 { border-color: var(--border-subtle); }
+  [data-theme="dark"] .border-slate-200\/80 { border-color: var(--border-default); }
+  [data-theme="dark"] .border-slate-300    { border-color: var(--border-strong); }
+  [data-theme="dark"] .border-white\/60    { border-color: var(--border-default); }
+  [data-theme="dark"] .border-white\/80    { border-color: var(--border-default); }
+
+  /* Surfaces — opaque sheets match the dark canvas. */
+  [data-theme="dark"] .bg-white     { background-color: var(--ground); }
+  [data-theme="dark"] .bg-white\/60 { background-color: var(--ground); }
+  [data-theme="dark"] .bg-white\/72 { background-color: var(--ground); }
+  [data-theme="dark"] .bg-white\/80 { background-color: var(--ground); }
+  [data-theme="dark"] .bg-white\/85 { background-color: var(--ground); }
+  [data-theme="dark"] .bg-white\/95 { background-color: var(--ground); }
+  [data-theme="dark"] .bg-slate-50     { background-color: var(--ground-secondary); }
+  [data-theme="dark"] .bg-slate-100    { background-color: var(--ground-secondary); }
+  [data-theme="dark"] .bg-slate-200\/50 { background-color: var(--ground-secondary); }
+
+  /* Drop shadows — Kite-style has none; remove the slate tint. */
   [data-theme="dark"] .shadow-slate-200\/50 { --tw-shadow-color: rgba(0,0,0,0.5); }
-  [data-theme="dark"] .shadow-slate-900\/20 { --tw-shadow-color: rgba(0,0,0,0.4); }
-  [data-theme="dark"] .bg-emerald-50 { background-color: var(--success-green-light); }
+  [data-theme="dark"] .shadow-slate-900\/20 { --tw-shadow-color: rgba(0,0,0,0.45); }
+
+  /* Brand / sidebar dark pill — demoted to text on dark. */
+  [data-theme="dark"] .bg-slate-900 { background-color: var(--ground-secondary); }
+  [data-theme="dark"] .ring-slate-800 { --tw-ring-color: var(--border-default); }
+  [data-theme="dark"] .text-white    { color: var(--text-primary); }
+
+  /* Status tints — flat hairlines on dark, not glow. */
+  [data-theme="dark"] .bg-emerald-50 { background-color: var(--success-green-bg); }
   [data-theme="dark"] .text-emerald-800 { color: var(--success-green); }
-  [data-theme="dark"] .border-emerald-300 { border-color: var(--success-green); }
-  [data-theme="dark"] .bg-amber-50 { background-color: var(--warning-amber-light); }
-  [data-theme="dark"] .text-amber-900 { color: var(--warning-amber); }
-  [data-theme="dark"] .border-amber-300 { border-color: var(--warning-amber); }
-  [data-theme="dark"] .hover\:bg-slate-50:hover { background-color: var(--glass-bg-subtle); }
+  [data-theme="dark"] .border-emerald-300 { border-color: var(--border-default); }
+  [data-theme="dark"] .bg-amber-50 { background-color: var(--ground-secondary); }
+  [data-theme="dark"] .text-amber-900 { color: var(--text-primary); }
+  [data-theme="dark"] .border-amber-300 { border-color: var(--border-default); }
+  [data-theme="dark"] .bg-rose-50 { background-color: var(--hazard-red-bg); }
+  [data-theme="dark"] .text-rose-900 { color: var(--hazard-red); }
+  [data-theme="dark"] .border-rose-300 { border-color: var(--border-default); }
+  [data-theme="dark"] .bg-blue-50 { background-color: var(--ground-secondary); }
+  [data-theme="dark"] .text-blue-700 { color: var(--accent-blue); }
+  [data-theme="dark"] .border-blue-300 { border-color: var(--border-default); }
+
+  /* Hovers — Kite uses a subtle off-white. */
+  [data-theme="dark"] .hover\:bg-slate-50:hover  { background-color: var(--ground-secondary); }
+  [data-theme="dark"] .hover\:bg-slate-100:hover { background-color: var(--ground-secondary); }
   [data-theme="dark"] .hover\:text-slate-700:hover { color: var(--text-primary); }
   [data-theme="dark"] .hover\:text-slate-800:hover { color: var(--text-primary); }
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Accordion helpers — progressive disclosure for the Strategy
+  Criteria & Rules (and similar) cards.
+  ---------------------------------------------------------------------------
+*/
+.accordion-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+
+/* Clean chevron — no box, no border, just the icon.
+   `currentColor` inherits from the button, so it scales naturally
+   with the card's container query width. */
+.accordion-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--card-icon-size);
+  height: var(--card-icon-size);
+  color: var(--text-tertiary);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.accordion-chevron:hover {
+  color: var(--text-secondary);
+}
+
+.accordion-chevron[data-open="true"] {
+  transform: rotate(180deg);
 }
