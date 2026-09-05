@@ -141,4 +141,51 @@ describe('universeService.getUniverse (DB-driven universe)', () => {
     expect(large.length).toBeGreaterThan(0);
     expect(large.every((s) => s.capCategory === 'large')).toBe(true);
   });
+
+  it('does not request a column that is not in the live schema (production 32-ticker bug)', async () => {
+    // Repro: production /api/tickers returns 404 → universe service falls
+    // through to direct Supabase. The Supabase fallback's SELECT must use
+    // only columns that exist in supabase-schema.sql + migrations. Asking
+    // for a missing column (e.g. is_fno_default) causes Supabase to throw
+    // and the service silently falls back to the 32-ticker SEED_UNIVERSE.
+    const { getUniverse } = await loadService();
+    const DB_SIZE = 450;
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) });
+    const selectSpy = vi.fn();
+    mocks.supabaseFromMock.mockReturnValueOnce({
+      select: selectSpy.mockReturnValue({
+        order: vi.fn().mockReturnThis(),
+        then: (resolve: any) => Promise.resolve({ data: makeSupabaseRows(DB_SIZE), error: null }).then(resolve),
+      }),
+    });
+
+    await getUniverse('all');
+
+    // The SELECT must be a parseable list and must not include columns
+    // that are absent from the migration (currently is_fno_default).
+    const selectArg = selectSpy.mock.calls[0]?.[0] as string | undefined;
+    expect(selectArg).toBeDefined();
+    const requested = (selectArg as string).split(',').map((c) => c.trim());
+    // Migration columns (from supabase/migrations/20250904000004_stock_universe.sql):
+    //   symbol, company_name, isin, cap_category, source_list, series,
+    //   trading_segment, sector, industry, last_seen_at, created_at, updated_at
+    const allowed = new Set([
+      'symbol',
+      'company_name',
+      'isin',
+      'cap_category',
+      'source_list',
+      'series',
+      'trading_segment',
+      'sector',
+      'industry',
+      'last_seen_at',
+      'created_at',
+      'updated_at',
+    ]);
+    for (const col of requested) {
+      expect(allowed.has(col)).toBe(true);
+    }
+  });
 });
