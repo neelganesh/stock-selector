@@ -519,15 +519,19 @@ function DashboardContent() {
                   </button>
                 )}
 
-                {/* Zerodha Login / Connect Button — demoted to a quiet pill */}
-                <button
-                  onClick={() => setIsZerodhaModalOpen(true)}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-[color:var(--text-secondary)] bg-[color:var(--elevated-1)] hover:bg-orange-50 hover:text-orange-700 border border-[color:var(--glass-border-subtle)] transition-all flex items-center gap-1.5 cursor-pointer"
-                  title="Connect Zerodha Kite for live data"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                  <span>Connect Zerodha</span>
-                </button>
+                {/* Zerodha Login / Connect Button — demoted to a quiet pill.
+                    Hidden when Kite is already live: the data-source pill above
+                    already shows connection state and opens the same modal. */}
+                {!isKiteLive && (
+                  <button
+                    onClick={() => setIsZerodhaModalOpen(true)}
+                    className="px-3 py-2 rounded-xl text-xs font-medium text-[color:var(--text-secondary)] bg-[color:var(--elevated-1)] hover:bg-orange-50 hover:text-orange-700 border border-[color:var(--glass-border-subtle)] transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Connect Zerodha Kite for live data"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                    <span>Connect Zerodha</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => runScanWithToast()}
