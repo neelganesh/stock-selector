@@ -217,6 +217,50 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     }
   };
 
+  const handleSaveKiteCredentials = async () => {
+    if (!draft?.zerodha_api_key?.trim() || !draft?.zerodha_api_secret?.trim()) {
+      setSaveMessage({ type: 'error', text: 'Enter both API Key and API Secret' });
+      toast.error('Enter both API Key and API Secret');
+      return;
+    }
+    if (!user) {
+      setSaveMessage({ type: 'error', text: 'Please sign in first' });
+      toast.error('Please sign in first');
+      return;
+    }
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/kite/credentials', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          api_key: draft.zerodha_api_key.trim(),
+          api_secret: draft.zerodha_api_secret.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save credentials');
+      }
+      // Refresh settings to get updated state
+      await fetchSettings();
+      setSaveMessage({ type: 'success', text: 'Credentials saved securely' });
+      toast.success('Kite credentials saved securely');
+    } catch (err: any) {
+      const message = err?.message || 'Failed to save credentials';
+      setSaveMessage({ type: 'error', text: message });
+      toast.error(`Save failed: ${message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleResetPaper = async () => {
     if (!confirm('Reset paper trading portfolio? This cancels all open paper positions.')) return;
     if (!user) return;
@@ -372,7 +416,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
               expiresAt={settings?.zerodha_access_token_expires_at}
               draft={draft}
               updateDraft={updateDraft}
-              handleSave={handleSave}
+              handleSave={handleSaveKiteCredentials}
               isSaving={isSaving}
               handleGenerateToken={handleGenerateToken}
               isGeneratingToken={isGeneratingToken}
