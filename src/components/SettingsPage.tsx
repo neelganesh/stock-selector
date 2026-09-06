@@ -207,8 +207,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to reset credentials');
       }
-      // Refresh settings
-      setDraft(prev => prev ? { ...prev, zerodha_api_key: null, zerodha_api_secret: null } : null);
+      // Refresh settings from server to get fresh state
+      await fetchSettings();
       toast.success('Kite credentials reset. You can reconfigure anytime from Settings.');
     } catch (err: any) {
       toast.error(`Reset failed: ${err?.message || 'Unknown error'}`);
