@@ -347,6 +347,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
           {activeSection === 'kite' && (
             <KiteSettings
               apiKey={settings?.zerodha_api_key}
+              hasApiSecret={!!settings?.zerodha_api_secret}
               expiresAt={settings?.zerodha_access_token_expires_at}
               draft={draft}
               updateDraft={updateDraft}
@@ -563,6 +564,7 @@ function PaperTradingSettings({
 
 function KiteSettings({
   apiKey,
+  hasApiSecret,
   expiresAt,
   draft,
   updateDraft,
@@ -572,6 +574,7 @@ function KiteSettings({
   isLoggingIn,
 }: {
   apiKey?: string | null;
+  hasApiSecret?: boolean;
   expiresAt?: string | null;
   draft: UserSettings | null;
   updateDraft: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
@@ -581,6 +584,7 @@ function KiteSettings({
   isLoggingIn: boolean;
 }) {
   const isConnected = !!apiKey;
+  const isCredentialsLocked = !!hasApiSecret;
   const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
   const isExpired = expiresAtDate ? expiresAtDate < new Date() : true;
 
@@ -638,7 +642,8 @@ function KiteSettings({
           value={draft?.zerodha_api_key ?? ''}
           onChange={e => updateDraft('zerodha_api_key', e.target.value)}
           placeholder="e.g. 5u968to2eligtgz8"
-          className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs"
+          disabled={isCredentialsLocked}
+          className={`w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs ${isCredentialsLocked ? 'bg-slate-100 cursor-not-allowed text-slate-500' : 'focus:bg-white'}`}
         />
       </div>
 
@@ -648,20 +653,21 @@ function KiteSettings({
         </label>
         <input
           type="password"
-          value={(draft as any)?.zerodha_api_secret ?? ''}
+          value={isCredentialsLocked ? '••••••••••••••••' : (draft as any)?.zerodha_api_secret ?? ''}
           onChange={e => updateDraft('zerodha_api_secret' as any, e.target.value as any)}
-          placeholder="••••••••••••••••"
-          className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs"
+          placeholder={isCredentialsLocked ? 'Saved (locked)' : '••••••••••••••••'}
+          disabled={isCredentialsLocked}
+          className={`w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs ${isCredentialsLocked ? 'bg-slate-100 cursor-not-allowed text-slate-500' : 'focus:bg-white'}`}
         />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || isCredentialsLocked}
           className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors"
         >
-          {isSaving ? 'Saving…' : 'Save Credentials'}
+          {isSaving ? 'Saving…' : isCredentialsLocked ? 'Credentials Locked' : 'Save Credentials'}
         </button>
         <button
           onClick={handleSaveAndLogin}
@@ -671,6 +677,13 @@ function KiteSettings({
           {isLoggingIn ? 'Redirecting…' : 'Save & Login to Zerodha'}
         </button>
       </div>
+
+      {isCredentialsLocked && (
+        <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+          <Icon name="lock" size={14} strokeWidth={2} />
+          <span>Credentials are locked. Login again if session expires.</span>
+        </div>
+      )}
 
       <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-start gap-1.5">
         <Icon name="info" size={14} strokeWidth={2} className="mt-0.5 shrink-0" />

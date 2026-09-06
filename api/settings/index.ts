@@ -34,6 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           total_capital, risk_per_trade_pct, max_position_pct,
           max_sector_pct, max_open_strategies, daily_loss_limit_pct,
           paper_trading_enabled, paper_trading_capital,
+          zerodha_api_key, zerodha_api_secret,
           created_at, updated_at
         `)
         .eq('user_id', user.id)

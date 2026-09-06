@@ -36,6 +36,7 @@ export type UserProfile = {
   paper_trading_enabled: boolean;
   paper_trading_capital: number;
   zerodha_api_key: string | null;
+  zerodha_api_secret: string | null;
   zerodha_access_token: string | null;
   zerodha_access_token_expires_at: string | null;
   zerodha_user_id: string | null;
