@@ -400,13 +400,20 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
           transition={{ duration: 0.2 }}
         >
           {activeSection === 'capital' && (
-            <CapitalRiskSettings draft={draft} updateDraft={updateDraft} />
+            <CapitalRiskSettings 
+              draft={draft} 
+              updateDraft={updateDraft}
+              onSave={handleSave}
+              isSaving={isSaving}
+            />
           )}
           {activeSection === 'paper' && (
             <PaperTradingSettings
               draft={draft}
               updateDraft={updateDraft}
               onReset={handleResetPaper}
+              onSave={handleSave}
+              isSaving={isSaving}
             />
           )}
           {activeSection === 'kite' && (
@@ -495,19 +502,34 @@ function NumberField({
 function CapitalRiskSettings({
   draft,
   updateDraft,
+  onSave,
+  isSaving,
 }: {
   draft: UserSettings;
   updateDraft: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
+  onSave: () => void;
+  isSaving: boolean;
 }) {
   return (
     <GlassCard variant="default" padding="lg" className="space-y-4">
-      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-        <Icon name="wallet" size={15} strokeWidth={2} />
-        Capital & Risk Configuration
-      </h3>
-      <p className="text-xs text-slate-500">
-        These limits protect your capital. The screener will block trades that exceed them.
-      </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+            <Icon name="wallet" size={15} strokeWidth={2} />
+            Capital & Risk Configuration
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            These limits protect your capital. The screener will block trades that exceed them.
+          </p>
+        </div>
+        <button
+          onClick={onSave}
+          disabled={isSaving}
+          className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors"
+        >
+          {isSaving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <NumberField
@@ -578,21 +600,36 @@ function PaperTradingSettings({
   draft,
   updateDraft,
   onReset,
+  onSave,
+  isSaving,
 }: {
   draft: UserSettings;
   updateDraft: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
   onReset: () => void;
+  onSave: () => void;
+  isSaving: boolean;
 }) {
   return (
     <div className="space-y-4">
       <GlassCard variant="default" padding="lg" className="space-y-4">
-        <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-          <Icon name="note" size={15} strokeWidth={2} />
-          Paper Trading Mode
-        </h3>
-        <p className="text-xs text-slate-500">
-          Test strategies with simulated trades before risking real capital.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <Icon name="note" size={15} strokeWidth={2} />
+              Paper Trading Mode
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Test strategies with simulated trades before risking real capital.
+            </p>
+          </div>
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors"
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
 
         <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 cursor-pointer">
           <div>
