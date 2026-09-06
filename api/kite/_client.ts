@@ -70,7 +70,7 @@ async function getUserKiteCredentials(userId: string): Promise<KiteCredentials |
     // Wrap in try-catch to handle missing columns gracefully.
     const { data: profile } = await supabaseAdmin
       .from('user_profiles')
-      .select('zerodha_api_key, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
+      .select('zerodha_api_key, zerodha_api_secret, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
       .eq('user_id', userId)
       .maybeSingle();
 
