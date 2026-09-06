@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './GlassCard';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../hooks/useTheme';
 import type { ThemeMode } from '../hooks/useTheme';
 import { useAuth } from './AuthProvider';
+import { useToast } from './useToast';
+import { getUniverseCounts, refreshUniverse } from '../services/universeService';
+
+const ADMIN_TOKEN_STORAGE_KEY = 'stock-selector.adminToken';
 
 interface UserSettings {
   total_capital: number;
@@ -26,17 +31,19 @@ interface SettingsPageProps {
 }
 
 const SECTIONS = [
-  { id: 'capital', label: 'Capital & Risk', icon: '💰' },
-  { id: 'paper', label: 'Paper Trading', icon: '📝' },
-  { id: 'kite', label: 'Zerodha API', icon: '🔌' },
-  { id: 'appearance', label: 'Appearance', icon: '🎨' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔' },
+  { id: 'capital', label: 'Capital & Risk', icon: 'wallet' },
+  { id: 'paper', label: 'Paper Trading', icon: 'note' },
+  { id: 'kite', label: 'Zerodha API', icon: 'plug' },
+  { id: 'universe', label: 'Stock Universe', icon: 'globe' },
+  { id: 'appearance', label: 'Appearance', icon: 'palette' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell' },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]['id'];
 
 export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const { user, getAccessToken } = useAuth();
+  const toast = useToast();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [draft, setDraft] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,10 +63,10 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   // Theme — persisted by useTheme
   const { theme: themeMode, setTheme: setThemeMode, resolvedTheme } = useTheme();
 
-  const THEME_OPTIONS: { id: ThemeMode; label: string; sub: string; icon: string }[] = [
-    { id: 'system', label: 'System', sub: 'Follow OS setting', icon: '🖥️' },
-    { id: 'light', label: 'Light', sub: 'Always light', icon: '☀️' },
-    { id: 'dark', label: 'Dark', sub: 'Always dark', icon: '🌙' },
+  const THEME_OPTIONS: { id: ThemeMode; label: string; sub: string; icon: IconName }[] = [
+    { id: 'system', label: 'System', sub: 'Follow OS setting', icon: 'monitor' },
+    { id: 'light', label: 'Light', sub: 'Always light', icon: 'sun' },
+    { id: 'dark', label: 'Dark', sub: 'Always dark', icon: 'moon' },
   ];
 
   const fetchSettings = async () => {
@@ -78,8 +85,9 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       const data = await response.json();
       setSettings(data);
       setDraft(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Settings fetch error:', err);
+      toast.error(`Couldn't load settings: ${err?.message || 'network error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -93,6 +101,13 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     if (!draft || !user) return;
     setIsSaving(true);
     setSaveMessage(null);
+    // Snapshot the previous server-confirmed settings so we can roll back
+    // on error. Without this, a failed PATCH leaves the form in a
+    // "saved-looking" state that diverges from the server.
+    const previousSettings = settings;
+    // Optimistic update: show the new values immediately so the UI
+    // doesn't feel laggy. On failure we revert to `previousSettings`.
+    setSettings(draft);
     try {
       const token = await getAccessToken();
       if (!token) throw new Error('Not signed in');
@@ -112,9 +127,17 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       setSettings(data);
       setDraft(data);
       setSaveMessage({ type: 'success', text: 'Settings saved' });
+      toast.success('Settings saved');
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (err: any) {
-      setSaveMessage({ type: 'error', text: err.message || 'Failed to save settings' });
+      // Roll back the optimistic update.
+      if (previousSettings) {
+        setSettings(previousSettings);
+        setDraft(previousSettings);
+      }
+      const message = err?.message || 'Failed to save settings';
+      setSaveMessage({ type: 'error', text: message });
+      toast.error(`Save failed: ${message}`);
     } finally {
       setIsSaving(false);
     }
@@ -130,11 +153,13 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const handleSaveAndLogin = async () => {
     if (!draft?.zerodha_api_key?.trim() || !draft?.zerodha_api_secret?.trim()) {
       setSaveMessage({ type: 'error', text: 'Enter both API Key and API Secret' });
+      toast.error('Enter both API Key and API Secret');
       setActiveSection('kite');
       return;
     }
     if (!user) {
       setSaveMessage({ type: 'error', text: 'Please sign in first' });
+      toast.error('Please sign in first');
       return;
     }
     setIsLoggingIn(true);
@@ -159,12 +184,15 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to save credentials');
       }
+      toast.success('Credentials saved — redirecting to Zerodha…');
       // Now redirect to Zerodha's OAuth page.
       const apiKey = draft.zerodha_api_key.trim();
       window.location.href = `https://kite.zerodha.com/connect/login?v=3&api_key=${encodeURIComponent(apiKey)}`;
     } catch (err: any) {
       setIsLoggingIn(false);
-      setSaveMessage({ type: 'error', text: err.message || 'Failed to start Zerodha login' });
+      const message = err?.message || 'Failed to start Zerodha login';
+      setSaveMessage({ type: 'error', text: message });
+      toast.error(`Zerodha login failed: ${message}`);
     }
   };
 
@@ -185,10 +213,13 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       if (!response.ok) throw new Error('Reset failed');
       const data = await response.json();
       setSaveMessage({ type: 'success', text: data.message });
+      toast.success(data.message || 'Paper portfolio reset');
       fetchSettings();
       setTimeout(() => setSaveMessage(null), 3000);
-    } catch (err) {
-      setSaveMessage({ type: 'error', text: 'Failed to reset paper portfolio' });
+    } catch (err: any) {
+      const message = err?.message || 'Failed to reset paper portfolio';
+      setSaveMessage({ type: 'error', text: message });
+      toast.error(`Reset failed: ${message}`);
     }
   };
 
@@ -199,7 +230,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   if (!isLoggedIn) {
     return (
       <GlassCard variant="default" padding="lg" className="text-center">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4 text-slate-400">
+        <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4 text-[color:var(--text-tertiary)]">
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           </svg>
@@ -221,7 +252,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       <GlassCard variant="default" padding="lg">
         <div className="space-y-3">
           {[1, 2, 3].map(n => (
-            <div key={n} className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+            <div key={n} className="h-12 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] animate-pulse" />
           ))}
         </div>
       </GlassCard>
@@ -231,18 +262,18 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   return (
     <div className="space-y-4">
       {/* Section Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl bg-slate-50/50 border border-slate-200/60 overflow-x-auto">
+      <div className="flex gap-1 p-1 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] border border-[color:var(--border-subtle)] overflow-x-auto">
         {SECTIONS.map(section => (
           <button
             key={section.id}
             onClick={() => setActiveSection(section.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-[10px] text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5 ${
               activeSection === section.id
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-[color:var(--ground)] text-[color:var(--text-primary)] border border-[color:var(--border-default)]'
+                : 'text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)]'
             }`}
           >
-            <span>{section.icon}</span>
+            <Icon name={section.icon} size={13} strokeWidth={2.2} />
             <span>{section.label}</span>
           </button>
         ))}
@@ -255,20 +286,20 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200"
+            className="flex items-center justify-between p-3 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] border border-[color:var(--border-subtle)]"
           >
-            <span className="text-xs font-bold text-amber-800">You have unsaved changes</span>
+            <span className="text-xs font-bold text-[color:var(--text-primary)]">You have unsaved changes</span>
             <div className="flex gap-2">
               <button
                 onClick={() => setDraft(settings)}
-                className="px-3 py-1.5 rounded-lg bg-white text-slate-700 text-xs font-bold hover:bg-slate-50"
+                className="px-3 py-1.5 rounded-[10px] bg-transparent text-[color:var(--text-primary)] text-xs font-bold hover:bg-[color:var(--card-bg-hover)]"
               >
                 Discard
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-[10px] bg-[color:var(--accent)] text-[color:var(--accent-fg)] text-xs font-bold hover:opacity-90 disabled:opacity-50"
               >
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
@@ -283,10 +314,10 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className={`p-3 rounded-xl text-xs font-bold ${
+            className={`p-3 rounded-[var(--card-radius)] text-xs font-bold border ${
               saveMessage.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border border-rose-200'
+                ? 'bg-[color:var(--ground-secondary)] text-[color:var(--positive)] border-[color:var(--positive)]/30'
+                : 'bg-[color:var(--ground-secondary)] text-[color:var(--negative)] border-[color:var(--negative)]/30'
             }`}
           >
             {saveMessage.text}
@@ -324,6 +355,9 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
               handleSaveAndLogin={handleSaveAndLogin}
               isLoggingIn={isLoggingIn}
             />
+          )}
+          {activeSection === 'universe' && (
+            <StockUniverseSettings />
           )}
           {activeSection === 'appearance' && (
             <AppearanceSettings
@@ -400,7 +434,7 @@ function CapitalRiskSettings({
   return (
     <GlassCard variant="default" padding="lg" className="space-y-4">
       <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-        <span>💰</span>
+        <Icon name="wallet" size={15} strokeWidth={2} />
         Capital & Risk Configuration
       </h3>
       <p className="text-xs text-slate-500">
@@ -485,7 +519,7 @@ function PaperTradingSettings({
     <div className="space-y-4">
       <GlassCard variant="default" padding="lg" className="space-y-4">
         <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-          <span>📝</span>
+          <Icon name="note" size={15} strokeWidth={2} />
           Paper Trading Mode
         </h3>
         <p className="text-xs text-slate-500">
@@ -558,7 +592,7 @@ function KiteSettings({
   return (
     <GlassCard variant="default" padding="lg" className="space-y-4">
       <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-        <span>🔌</span>
+        <Icon name="plug" size={15} strokeWidth={2} />
         Zerodha Kite API
       </h3>
 
@@ -638,8 +672,9 @@ function KiteSettings({
         </button>
       </div>
 
-      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800">
-        <strong>ℹ️</strong> Get your API key + secret from{' '}
+      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-start gap-1.5">
+        <Icon name="info" size={14} strokeWidth={2} className="mt-0.5 shrink-0" />
+        <span className="font-semibold">Get your API key + secret from{' '}</span>
         <a
           href="https://developers.kite.trade/"
           target="_blank"
@@ -648,8 +683,8 @@ function KiteSettings({
         >
           developers.kite.trade
         </a>
-        . Credentials are stored encrypted and only used to generate your daily access token.
-        Access tokens auto-expire at 6 AM next day.
+        <span className="font-semibold">.</span>
+        <span className="font-semibold">Credentials are stored encrypted and only used to generate your daily access token. Access tokens auto-expire at 6 AM next day.</span>
       </div>
     </GlassCard>
   );
@@ -665,7 +700,7 @@ function NotificationSettings({
   return (
     <GlassCard variant="default" padding="lg" className="space-y-4">
       <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-        <span>🔔</span>
+        <Icon name="bell" size={15} strokeWidth={2} />
         Notification Preferences
       </h3>
       <p className="text-xs text-slate-500">
@@ -714,7 +749,7 @@ interface AppearanceOption {
   id: ThemeMode;
   label: string;
   sub: string;
-  icon: string;
+  icon: IconName;
 }
 
 function AppearanceSettings({
@@ -731,11 +766,11 @@ function AppearanceSettings({
   return (
     <GlassCard variant="default" padding="lg" className="space-y-5">
       <div>
-        <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-2">
-          <span>🎨</span>
+        <h3 className="text-sm font-extrabold text-[color:var(--text-primary)] flex items-center gap-2">
+          <Icon name="palette" size={15} strokeWidth={2} />
           Appearance
         </h3>
-        <p className="text-xs text-text-secondary mt-1">
+        <p className="text-xs text-[color:var(--text-secondary)] mt-1">
           Choose how Quant Vision looks. System follows your operating system preference.
         </p>
       </div>
@@ -757,13 +792,13 @@ function AppearanceSettings({
               }`}
             >
               <div className="flex items-center gap-2 w-full">
-                <span className="text-lg" aria-hidden="true">{opt.icon}</span>
-                <span className="text-sm font-bold text-text-primary">{opt.label}</span>
+                <Icon name={opt.icon} size={18} strokeWidth={2} />
+                <span className="text-sm font-bold text-[color:var(--text-primary)]">{opt.label}</span>
                 {isActive && (
                   <span className="ml-auto w-2 h-2 rounded-full bg-accent-blue animate-pulse" aria-hidden="true" />
                 )}
               </div>
-              <span className="text-xs text-text-secondary">{opt.sub}</span>
+              <span className="text-xs text-[color:var(--text-secondary)]">{opt.sub}</span>
             </button>
           );
         })}
@@ -771,10 +806,10 @@ function AppearanceSettings({
 
       <div className="flex items-center justify-between p-3 rounded-lg bg-glass-bg-subtle border border-glass-border-subtle">
         <div>
-          <p className="text-xs font-bold text-text-primary">Currently showing</p>
-          <p className="text-[11px] text-text-secondary mt-0.5">
-            Resolved to <span className="font-mono font-bold text-text-primary">{resolvedTheme}</span>
-            {themeMode === 'system' && <span className="text-text-tertiary"> (following OS)</span>}
+          <p className="text-xs font-bold text-[color:var(--text-primary)]">Currently showing</p>
+          <p className="text-[11px] text-[color:var(--text-secondary)] mt-0.5">
+            Resolved to <span className="font-mono font-bold text-[color:var(--text-primary)]">{resolvedTheme}</span>
+            {themeMode === 'system' && <span className="text-[color:var(--text-tertiary)]"> (following OS)</span>}
           </p>
         </div>
         <span
@@ -791,5 +826,250 @@ function AppearanceSettings({
         </span>
       </div>
     </GlassCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stock Universe Settings
+// ---------------------------------------------------------------------------
+//
+// Lets admins (those who hold the CRON_SECRET) trigger a server-side
+// re-fetch of the NSE index lists (Nifty 100 / Midcap 100 / Smallcap 250)
+// and upsert them into the `stock_universe` table. The token never leaves
+// the browser; the server compares it to CRON_SECRET on each request.
+//
+// The token is stored in localStorage so the user only has to paste it once
+// per browser. It is masked in the UI (type=password) and never logged.
+// ---------------------------------------------------------------------------
+
+interface UniverseCounts {
+  large: number;
+  mid: number;
+  small: number;
+  total: number;
+}
+
+function StockUniverseSettings() {
+  const toast = useToast();
+  const [counts, setCounts] = useState<UniverseCounts | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<string | null>(null);
+  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [adminToken, setAdminToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const [showToken, setShowToken] = useState(false);
+
+  const loadCounts = async () => {
+    setIsLoadingCounts(true);
+    try {
+      const c = await getUniverseCounts();
+      setCounts(c);
+    } catch (err: any) {
+      console.error('Universe counts error:', err);
+      toast.error(`Couldn't load universe counts: ${err?.message || 'network error'}`);
+    } finally {
+      setIsLoadingCounts(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleTokenChange = (value: string) => {
+    setAdminToken(value);
+    try {
+      if (value) localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, value);
+      else localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    } catch {
+      // localStorage may be unavailable (private mode, SSR) — non-fatal
+    }
+  };
+
+  const handleClearToken = () => {
+    handleTokenChange('');
+    setShowToken(false);
+    toast.info('Admin token cleared from this browser');
+  };
+
+  const handleRefresh = async () => {
+    const token = adminToken.trim();
+    if (!token) {
+      toast.error('Enter the admin token first (CRON_SECRET).');
+      return;
+    }
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/admin/refresh-universe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': token,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      // Clear the in-memory universe cache so subsequent reads pick up new tickers
+      await refreshUniverse();
+      const c = await getUniverseCounts();
+      setCounts(c);
+      setLastRefresh(new Date().toISOString());
+      toast.success(
+        `Universe refreshed: ${data.large ?? 0} large · ${data.mid ?? 0} mid · ${data.small ?? 0} small (${data.total ?? c.total} total) in ${(data.durationMs ?? 0) / 1000}s`
+      );
+    } catch (err: any) {
+      console.error('Refresh universe error:', err);
+      const msg = err?.message || 'network error';
+      // 401 means the token didn't match CRON_SECRET
+      if (/401|unauthorized/i.test(msg)) {
+        toast.error('Token rejected by server. Check CRON_SECRET and try again.');
+      } else {
+        toast.error(`Refresh failed: ${msg}`);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  return (
+    <GlassCard variant="default" padding="lg" className="space-y-4">
+      <div>
+        <h3 className="text-sm font-extrabold text-[color:var(--text-primary)]">Stock Universe</h3>
+        <p className="text-xs text-[color:var(--text-secondary)] mt-1">
+          Source of truth for the scanner. Counts are pulled from the in-memory
+          cache (DB-backed when Supabase is reachable, seed fallback otherwise).
+        </p>
+      </div>
+
+      {/* Counts */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="universe-counts">
+        {isLoadingCounts ? (
+          [1, 2, 3, 4].map((n) => (
+            <div key={n} className="h-16 rounded-xl bg-glass-bg-subtle animate-pulse" />
+          ))
+        ) : counts ? (
+          <>
+            <CountChip label="Large" value={counts.large} capCategory="large" />
+            <CountChip label="Mid" value={counts.mid} capCategory="mid" />
+            <CountChip label="Small" value={counts.small} capCategory="small" />
+            <CountChip label="Total" value={counts.total} capCategory="total" highlight />
+          </>
+        ) : (
+          <div className="col-span-full text-xs text-[color:var(--text-secondary)]">Counts unavailable.</div>
+        )}
+      </div>
+
+      {lastRefresh && (
+        <p className="text-[11px] text-[color:var(--text-secondary)]" data-testid="universe-last-refresh">
+          Last server refresh: {new Date(lastRefresh).toLocaleString()}
+        </p>
+      )}
+
+      {/* Admin token + refresh */}
+      <div className="p-3 rounded-xl border border-glass-border-subtle bg-glass-bg-subtle space-y-3">
+        <div>
+          <p className="text-xs font-bold text-[color:var(--text-primary)]">Refresh from NSE</p>
+          <p className="text-[11px] text-[color:var(--text-secondary)] mt-0.5">
+            Fetches Nifty 100 / Midcap 100 / Smallcap 250 CSV lists and upserts to
+            the <span className="font-mono">stock_universe</span> table. Requires
+            the <span className="font-mono">CRON_SECRET</span> admin token.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="admin-token" className="text-[11px] font-bold text-[color:var(--text-secondary)]">
+            Admin token (CRON_SECRET)
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="admin-token"
+              data-testid="universe-admin-token"
+              type={showToken ? 'text' : 'password'}
+              value={adminToken}
+              onChange={(e) => handleTokenChange(e.target.value)}
+              placeholder="Paste your CRON_SECRET here"
+              autoComplete="off"
+              spellCheck={false}
+              className="flex-1 px-3 py-2 rounded-lg border border-glass-border-subtle bg-white text-xs font-mono text-[color:var(--text-primary)] placeholder:text-[color:var(--text-tertiary)] focus:outline-none focus:border-accent-blue"
+            />
+            <button
+              type="button"
+              onClick={() => setShowToken((v) => !v)}
+              className="px-3 py-2 rounded-lg border border-glass-border-subtle bg-white text-[11px] font-bold text-[color:var(--text-secondary)] hover:bg-glass-bg-subtle"
+              aria-label={showToken ? 'Hide token' : 'Show token'}
+            >
+              {showToken ? 'Hide' : 'Show'}
+            </button>
+            {adminToken && (
+              <button
+                type="button"
+                onClick={handleClearToken}
+                className="px-3 py-2 rounded-lg border border-glass-border-subtle bg-white text-[11px] font-bold text-rose-600 hover:bg-rose-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-[color:var(--text-tertiary)]">
+            Stored locally in this browser only. Never sent anywhere except
+            directly to the refresh endpoint.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isRefreshing || !adminToken.trim()}
+          data-testid="universe-refresh-button"
+          className="w-full sm:w-auto px-4 py-2 rounded-lg bg-accent-blue text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {isRefreshing ? (
+            <>
+              <span className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+              Refreshing from NSE…
+            </>
+          ) : (
+            <>
+              <Icon name="refresh" size={13} strokeWidth={2.2} />
+              <span>Refresh Universe</span>
+            </>
+          )}
+        </button>
+      </div>
+    </GlassCard>
+  );
+}
+
+function CountChip({
+  label,
+  value,
+  capCategory,
+  highlight = false,
+}: {
+  label: string;
+  value: number;
+  capCategory: 'large' | 'mid' | 'small' | 'total';
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      data-testid={`universe-count-${capCategory}`}
+      className={`p-3 rounded-xl border ${
+        highlight
+          ? 'border-accent-blue bg-accent-blue-light'
+          : 'border-glass-border-subtle bg-white'
+      }`}
+    >
+      <p className="text-[10px] font-extrabold uppercase tracking-wide text-[color:var(--text-secondary)]">{label}</p>
+      <p className="text-lg font-extrabold text-[color:var(--text-primary)] mt-0.5">{value}</p>
+    </div>
   );
 }

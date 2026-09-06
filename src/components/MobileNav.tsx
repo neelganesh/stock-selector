@@ -1,10 +1,12 @@
 import { motion } from 'framer-motion';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { Icon, type IconName } from './Icon';
 
 export interface MobileNavTab {
   id: string;
   label: string;
-  icon: string; // single emoji glyph or short symbol
+  /** Name from the shared icon set — never an emoji. */
+  icon: IconName;
 }
 
 export interface MobileNavProps {
@@ -28,8 +30,12 @@ export function MobileNav({ tabs, activeTab, onChange, forceVisible = false }: M
       data-testid="mobile-nav"
       data-active-tab={activeTab}
       aria-label="Primary"
-      className="fixed bottom-0 inset-x-0 z-50 vision-glass border-t border-glass-border-subtle shadow-[0_-10px_30px_-5px_rgba(0,0,0,0.08)] backdrop-blur-xl"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="fixed bottom-0 inset-x-0 z-50"
+      style={{
+        backgroundColor: 'var(--ground)',
+        borderTop: '1px solid var(--border-default)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
     >
       <ul className="grid grid-cols-5 max-w-2xl mx-auto">
         {tabs.map((t) => {
@@ -42,27 +48,27 @@ export function MobileNav({ tabs, activeTab, onChange, forceVisible = false }: M
                 aria-current={isActive ? 'page' : undefined}
                 data-testid={`mobile-nav-tab-${t.id}`}
                 data-active={isActive ? 'true' : 'false'}
-                className={`relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[52px] py-2 px-1 transition-colors duration-200 cursor-pointer ${
-                  isActive
-                    ? 'text-accent-blue'
-                    : 'text-text-secondary hover:text-text-primary active:text-text-primary'
-                }`}
+                className="relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[52px] py-2 px-1 transition-colors duration-200 cursor-pointer"
+                style={{
+                  color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
+                }}
               >
                 {isActive && (
                   <motion.span
                     layoutId="mobile-nav-indicator"
-                    className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-[3px] rounded-b-full bg-accent-blue"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-[3px] rounded-b-full"
+                    style={{ backgroundColor: 'var(--accent-brand)' }}
                     transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                   />
                 )}
-                <span
-                  className="text-lg leading-none"
-                  aria-hidden="true"
-                  style={{ filter: isActive ? 'none' : 'grayscale(0.3)' }}
+                <motion.span
+                  className="flex items-center justify-center"
+                  animate={{ scale: isActive ? 1.06 : 1 }}
+                  transition={{ type: 'spring', stiffness: 480, damping: 30 }}
                 >
-                  {t.icon}
-                </span>
-                <span className="text-[10px] font-extrabold tracking-tight leading-none">
+                  <Icon name={t.icon} size={21} strokeWidth={isActive ? 2.2 : 1.9} />
+                </motion.span>
+                <span className="text-[10px] font-semibold tracking-tight leading-none">
                   {t.label}
                 </span>
               </button>

@@ -16,10 +16,10 @@ export function ToastContainer({ toasts, onDismiss, isMobile = false }: ToastCon
   // Reverse so newest appears at the top of the stack.
   const ordered = [...visible].reverse();
 
-  const position = isMobile ? 'bottom-center' : 'top-right';
+  const position = isMobile ? 'bottom-center' : 'bottom-left';
   const positionClass = isMobile
-    ? 'bottom-4 inset-x-4 items-stretch sm:items-center'
-    : 'top-4 right-4 items-end';
+    ? 'bottom-20 inset-x-4 items-stretch sm:items-center'
+    : 'bottom-4 left-4 right-auto items-start';
 
   return (
     <div
@@ -30,7 +30,7 @@ export function ToastContainer({ toasts, onDismiss, isMobile = false }: ToastCon
       <div
         data-testid="toast-stack"
         data-position={position}
-        className="flex flex-col gap-2 w-full items-stretch sm:items-end"
+        className="flex flex-col gap-2 w-full sm:max-w-sm items-stretch"
       >
         <AnimatePresence initial={false}>
           {ordered.map((toast) => (

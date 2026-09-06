@@ -53,6 +53,9 @@ interface StrategyContextType {
 
   customScripList: string[];
   setCustomScripList: (scrips: string[]) => void;
+
+  isPaperOnly: boolean;
+  setIsPaperOnly: (v: boolean) => void;
 }
 
 const StrategyContext = createContext<StrategyContextType | null>(null);
@@ -81,6 +84,9 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
   const [activeDataSource, setActiveDataSource] = useState<DataSourceType>('yfinance (Fallback)');
   const [isZerodhaModalOpen, setIsZerodhaModalOpen] = useState<boolean>(false);
   const [customScripList, setCustomScripList] = useState<string[]>([]);
+  const [isPaperOnly, setIsPaperOnlyState] = useState<boolean>(true);
+
+  const setIsPaperOnly = (val: boolean) => setIsPaperOnlyState(val);
 
   const activeStrategy = getStrategyById(activeStrategyId);
 
@@ -165,6 +171,8 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
         setIsZerodhaModalOpen,
         customScripList,
         setCustomScripList,
+        isPaperOnly,
+        setIsPaperOnly,
       }}
     >
       {children}

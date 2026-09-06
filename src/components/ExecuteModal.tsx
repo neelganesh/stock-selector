@@ -226,7 +226,7 @@ export function ExecuteModal({
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-slate-200/60 sticky top-0 bg-white/95 backdrop-blur z-10 rounded-t-3xl">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              <div className={`w-10 h-10 flex items-center justify-center ${
                 isPaperTrading
                   ? 'bg-gradient-to-br from-amber-500 to-orange-600'
                   : 'bg-gradient-to-br from-emerald-500 to-emerald-600'
@@ -260,7 +260,7 @@ export function ExecuteModal({
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="p-2 rounded-[10px] text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--ground-secondary)] transition-colors"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -353,23 +353,23 @@ export function ExecuteModal({
                 </div>
               </div>
               <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-3 text-center">
-                <div className="p-2 rounded-xl bg-emerald-50">
-                  <p className="text-[10px] font-bold text-slate-400">R:R (T1)</p>
-                  <p className="font-bold text-emerald-700">
+                <div className="p-2 text-[color:var(--positive)]">
+                  <p className="text-[10px] font-bold text-[color:var(--text-tertiary)]">R:R (T1)</p>
+                  <p className="font-bold text-[color:var(--positive)]">
                     {entryPrice && stopLoss && target1 && entryPrice !== stopLoss
                       ? ((target1 - entryPrice) / Math.abs(entryPrice - stopLoss)).toFixed(2)
                       : '—'}
                   </p>
                 </div>
-                <div className="p-2 rounded-xl bg-emerald-50">
-                  <p className="text-[10px] font-bold text-slate-400">R:R (T2)</p>
-                  <p className="font-bold text-emerald-700">
+                <div className="p-2 text-[color:var(--positive)]">
+                  <p className="text-[10px] font-bold text-[color:var(--text-tertiary)]">R:R (T2)</p>
+                  <p className="font-bold text-[color:var(--positive)]">
                     {entryPrice && stopLoss && target2 && entryPrice !== stopLoss
                       ? ((target2 - entryPrice) / Math.abs(entryPrice - stopLoss)).toFixed(2)
                       : '—'}
                   </p>
                 </div>
-                <div className="p-2 rounded-xl bg-blue-50">
+                <div className="p-2 text-[color:var(--accent)]">
                   <p className="text-[10px] font-bold text-slate-400">Per Share Risk</p>
                   <p className="font-bold text-blue-700">{formatCurrency(perShareRisk)}</p>
                 </div>
@@ -408,19 +408,19 @@ export function ExecuteModal({
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center pt-2 border-t border-slate-100">
-                <div className="p-2 rounded-xl bg-slate-50">
-                  <p className="text-[10px] font-bold text-slate-400">Position Value</p>
-                  <p className="font-bold text-slate-900">{formatCompact(quantity * entryPrice)}</p>
+                <div className="p-2">
+                  <p className="text-[10px] font-bold text-[color:var(--text-tertiary)]">Position Value</p>
+                  <p className="font-bold text-[color:var(--text-primary)]">{formatCompact(quantity * entryPrice)}</p>
                 </div>
-                <div className="p-2 rounded-xl bg-slate-50">
-                  <p className="text-[10px] font-bold text-slate-400">% of Capital</p>
-                  <p className="font-bold text-slate-900">
+                <div className="p-2">
+                  <p className="text-[10px] font-bold text-[color:var(--text-tertiary)]">% of Capital</p>
+                  <p className="font-bold text-[color:var(--text-primary)]">
                     {availableCapital > 0 ? ((quantity * entryPrice) / availableCapital * 100).toFixed(1) : '—'}%
                   </p>
                 </div>
-                <div className="p-2 rounded-xl bg-slate-50">
-                  <p className="text-[10px] font-bold text-slate-400">Risk Amount</p>
-                  <p className="font-bold text-amber-600">{formatCompact(quantity * perShareRisk)}</p>
+                <div className="p-2">
+                  <p className="text-[10px] font-bold text-[color:var(--text-tertiary)]">Risk Amount</p>
+                  <p className="font-bold text-[color:var(--accent)]">{formatCompact(quantity * perShareRisk)}</p>
                 </div>
               </div>
             </GlassCard>
@@ -470,7 +470,7 @@ export function ExecuteModal({
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2"
+                className="p-3 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] border border-[color:var(--negative)]/30 text-[color:var(--negative)] text-sm flex items-center gap-2"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -485,7 +485,7 @@ export function ExecuteModal({
               disabled={isExecuting || quantity <= 0 || (!isLoggedIn && !isPaperTrading)}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              className={`w-full py-3.5 px-5 rounded-xl text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`w-full py-3.5 px-5 rounded-[var(--card-radius)] text-[color:var(--accent-fg)] font-bold text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                 isPaperTrading
                   ? 'bg-gradient-to-r from-amber-500 to-orange-600 shadow-orange-500/30'
                   : 'bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-emerald-500/30'
@@ -505,7 +505,7 @@ export function ExecuteModal({
                   </svg>
                   <span>
                     {isPaperTrading
-                      ? 'Simulate Paper Trade (No Real Order)'
+                      ? 'Paper Mode — Orders Disabled (Simulated)'
                       : 'Place Entry Order + GTT (SL + Targets)'}
                   </span>
                 </>
@@ -514,7 +514,7 @@ export function ExecuteModal({
 
             <p className="text-center text-[10px] text-slate-400">
               {isPaperTrading
-                ? 'This is a simulated paper trade. No real order will be placed.'
+                ? 'Paper Mode — Real orders disabled. This is a simulated trade only.'
                 : 'Places market entry order + GTT OCO (Stop Loss + Target 1 + Target 2)'}
             </p>
           </div>

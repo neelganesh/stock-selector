@@ -1,19 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MobileNav } from '../MobileNav';
+import type { IconName } from '../Icon';
 
 interface TabInfo {
   id: string;
   label: string;
-  icon: string;
+  icon: IconName;
 }
 
 const TABS: TabInfo[] = [
-  { id: 'signals', label: 'Signals', icon: '⚡' },
-  { id: 'heatmap', label: 'Sectors', icon: '📊' },
-  { id: 'executions', label: 'Trades', icon: '📋' },
-  { id: 'analytics', label: 'P&L', icon: '📈' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'signals', label: 'Signals', icon: 'bolt' },
+  { id: 'heatmap', label: 'Sectors', icon: 'bars' },
+  { id: 'executions', label: 'Trades', icon: 'clipboard' },
+  { id: 'analytics', label: 'P&L', icon: 'trend' },
+  { id: 'settings', label: 'Settings', icon: 'gear' },
 ];
 
 describe('MobileNav', () => {

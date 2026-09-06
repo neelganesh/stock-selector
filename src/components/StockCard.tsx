@@ -1,322 +1,485 @@
-import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { useMemo, useState } from 'react';
 import { GlassCard } from './GlassCard';
 import { AnimatedNumber } from './AnimatedNumber';
 import { SignalBadge } from './SignalBadge';
+import { InfoTooltip } from './InfoTooltip';
+import { Icon } from './Icon';
 import type { StockPick } from '../engine/types';
 
 interface StockCardProps {
+  isPaperOnly?: boolean;
   stock: StockPick;
   index?: number;
-  onOpenPositionCalculator?: (stock: StockPick) => void;
   onOpenExecuteModal?: (stock: StockPick) => void;
 }
 
-export function StockCard({ stock, index = 0, onOpenPositionCalculator, onOpenExecuteModal }: StockCardProps) {
+const formatPrice = (value: number) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+  }).format(value);
+
+const formatPercent = (value: number) => {
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}%`;
+};
+
+/** A dash, not the literal word "Unknown", when the engine has no data. */
+const displayValue = (value: string | undefined | null) =>
+  value && value.trim() && value !== 'Unknown' ? value : '—';
+
+/**
+ * Stock pick card.
+ *
+ * Card anatomy (unified design system):
+ *
+ *   [ SYM ]  Symbol  · signal    ₹ Price  +0.62%   <- header
+ *           Name / sector
+ *   ─────────────────────────────────────────────  <- 1px hairline
+ *   R:R 1:2.3 · Vol 1.2M · +5.1% upside   ⌄     <- sub-row
+ *   [expanded: price ladder · rationale ·
+ *    Execute action row]
+ *
+ * The expanded price section is a single labelled ladder — each level
+ * (stop loss / entry / current / target 1) is its own row with its
+ * marker, label, and value on the same line, so the value is shown
+ * exactly once and always visually attached to its marker. No separate
+ * price grid duplicates it. The Execute button is anchored at the bottom
+ * of the expanded body, not inlined with the rationale heading.
+ *
+ * Visual language: flat opaque surface, 1px hairline, no shadow, no
+ * boxes around icons or chevrons. Symbol monogram is a font. Padding,
+ * font-size, and icon size all scale via cqi.
+ */
+export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = false }: StockCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isPositive = stock.change >= 0;
+  const prefersReducedMotion = useReducedMotion();
 
-  const formatPrice = (value: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 2,
-    }).format(value);
-  };
-
-  const formatPercent = (value: number) => {
-    const sign = value >= 0 ? '+' : '';
-    return `${sign}${value.toFixed(2)}%`;
-  };
-
-  // Calculate Risk to Reward ratio
   const risk = Math.max(0.1, stock.signalDetails.entry - stock.signalDetails.stopLoss);
   const reward = Math.max(0.1, stock.signalDetails.target1 - stock.signalDetails.entry);
   const rrRatio = (reward / risk).toFixed(2);
+  const upsidePercent =
+    ((stock.signalDetails.target1 - stock.currentPrice) / stock.currentPrice) * 100;
 
-  // Target upside % from current price
-  const upsidePercent = ((stock.signalDetails.target1 - stock.currentPrice) / stock.currentPrice) * 100;
-
-  // Gauge bar position calculations
-  const minPrice = Math.min(stock.signalDetails.stopLoss, stock.currentPrice) * 0.98;
-  const maxPrice = Math.max(stock.signalDetails.target2 || stock.signalDetails.target1, stock.currentPrice) * 1.02;
-  const priceRange = maxPrice - minPrice;
-  const getPos = (val: number) => Math.min(100, Math.max(0, ((val - minPrice) / priceRange) * 100));
-
-  const currentPos = getPos(stock.currentPrice);
-  const entryPos = getPos(stock.signalDetails.entry);
+  const { currentPos, target1Pos, stopLossPos, entryPos } = useMemo(() => {
+    const min = Math.min(stock.signalDetails.stopLoss, stock.currentPrice) * 0.98;
+    const max = Math.max(
+      stock.signalDetails.target2 || stock.signalDetails.target1,
+      stock.currentPrice
+    ) * 1.02;
+    const range = max - min;
+    const pos = (val: number) => Math.min(100, Math.max(0, ((val - min) / range) * 100));
+    return {
+      stopLossPos: pos(stock.signalDetails.stopLoss),
+      currentPos: pos(stock.currentPrice),
+      target1Pos: pos(stock.signalDetails.target1),
+      entryPos: pos(stock.signalDetails.entry),
+    };
+  }, [stock.signalDetails, stock.currentPrice]);
 
   const renkoInfo = stock.signalDetails.indicators?.renko;
 
+  // Volume / market cap is display-only — label it so the compact value is
+  // readable at a glance instead of a bare number.
+  const volumeText = stock.volume || stock.marketCap;
+  const volumeLabel = stock.volume ? 'Vol' : 'MCap';
+
   return (
-    <GlassCard
-      variant="interactive"
-      padding="none"
-      initial={{ opacity: 0, y: 20 }}
+    <motion.div
+      initial={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
-        duration: 0.5,
-        delay: index * 0.08,
+        duration: prefersReducedMotion ? 0 : 0.4,
+        delay: prefersReducedMotion ? 0 : Math.min(index, 8) * 0.04,
         ease: [0.16, 1, 0.3, 1],
       }}
-      onClick={() => setIsExpanded(!isExpanded)}
-      className="group relative cursor-pointer overflow-hidden transition-all duration-300"
+      className="h-full"
     >
-      {/* Accent glow line on top border based on signal */}
-      <div
-        className={`absolute top-0 left-0 right-0 h-[3px] transition-opacity duration-300 ${
-          stock.signal.includes('buy')
-            ? 'bg-gradient-to-r from-emerald-400 via-green-500 to-teal-400'
-            : stock.signal === 'hold'
-            ? 'bg-gradient-to-r from-amber-400 via-yellow-500 to-orange-400'
-            : 'bg-gradient-to-r from-rose-400 via-red-500 to-pink-500'
-        }`}
-      />
+      <GlassCard
+        variant="default"
+        padding="none"
+        onClick={() => setIsExpanded((v) => !v)}
+        className="group relative cursor-pointer transition-colors duration-200 h-full"
+      >
+        {/* HEADER — symbol monogram (text, no chip) + name + price + chevron */}
 
-      {/* Main Content Viewport */}
-      <div className="p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          {/* Symbol & Title */}
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center font-extrabold text-sm shadow-md shrink-0 group-hover:scale-105 transition-transform duration-300">
-              {stock.symbol.slice(0, 2)}
-            </div>
-            <div className="flex flex-col justify-center">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-extrabold text-slate-900 tracking-tight leading-none">
-                  {stock.symbol}
-                </h3>
-                <div className="inline-flex items-center gap-2">
-                  <SignalBadge type={stock.signal} size="sm" />
+        <div
+          className="kite-card-header"
+          style={{ containerType: 'inline-size', containerName: 'stock-card' }}
+        >
+          {/* Symbol monogram */}
+          <span
+            className="kite-card-icon font-mono font-extrabold tracking-tight text-[color:var(--text-primary)] tabular-nums shrink-0"
+            style={{ fontSize: 'clamp(12px, 3cqi, 18px)' }}
+            aria-hidden="true"
+          >
+            {stock.symbol.slice(0, 2)}
+          </span>
 
-                  {stock.tradingSegment && (
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
-                        stock.tradingSegment === 'F&O Segment'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : 'bg-amber-50 text-amber-800 border border-amber-200'
-                      }`}
-                    >
-                      {stock.tradingSegment}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <p className="text-xs font-semibold text-slate-500 mt-1 flex items-center gap-1.5 leading-none">
-                <span>{stock.name}</span>
-                <span className="w-1 h-1 rounded-full bg-slate-300 inline-block" />
-                <span className="text-slate-400">{stock.sector}</span>
-              </p>
-            </div>
+          {/* Left: symbol only (signal moved to sub-row for more space) */}
+          <div className="min-w-0 flex-1 flex items-center">
+            <h3
+              className="kite-card-title truncate"
+              style={{ fontSize: 'clamp(13px, 4.2cqi, 16px)' }}
+            >
+              {stock.symbol}
+            </h3>
           </div>
 
-          {/* Price, Change & Upside Pill */}
-          <div className="flex items-center justify-between sm:justify-end gap-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
-            {/* Upside pill */}
-            {upsidePercent > 0 && (
-              <div className="hidden md:flex flex-col items-end">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Target Upside</span>
-                <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  +{upsidePercent.toFixed(1)}%
-                </span>
-              </div>
-            )}
-
-            <div className="text-right flex flex-col justify-center">
-              <div className="text-xl sm:text-2xl font-mono font-extrabold text-slate-900 tracking-tight leading-none">
+          {/* Right: price + change */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right">
+              <div
+                className="font-mono font-extrabold text-[color:var(--text-primary)] tracking-tight leading-none tabular-nums whitespace-nowrap"
+                style={{ fontSize: 'clamp(13px, 4.2cqi, 16px)' }}
+              >
                 <AnimatedNumber value={stock.currentPrice} format={formatPrice} />
               </div>
               <motion.div
-                className={`text-xs font-bold mt-1.5 flex items-center justify-end gap-1 leading-none ${
-                  isPositive ? 'text-emerald-700' : 'text-rose-700'
+                className={`font-bold mt-0.5 flex items-center justify-end gap-0.5 leading-none tabular-nums ${
+                  isPositive
+                    ? 'text-[color:var(--success-green)]'
+                    : 'text-[color:var(--hazard-red)]'
                 }`}
-                initial={{ opacity: 0, x: -6 }}
+                style={{ fontSize: 'clamp(10px, 2.6cqi, 12px)' }}
+                initial={{ opacity: 0, x: -4 }}
                 animate={{ opacity: 1, x: 0 }}
                 key={stock.changePercent}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d={isPositive ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+                <svg
+                  viewBox="0 0 12 12"
+                  width="1em"
+                  height="1em"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d={isPositive ? 'M3 8L6 4L9 8' : 'M3 4L6 8L9 4'}
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
-                <span>{formatPercent(Math.abs(stock.changePercent))}</span>
+                <span>{formatPercent(stock.changePercent)}</span>
               </motion.div>
-            </div>
-
-            {/* Expand Chevron */}
-            <div className="w-8 h-8 rounded-full bg-slate-100/80 border border-slate-200/80 flex items-center justify-center text-slate-500 group-hover:text-slate-900 transition-colors shrink-0 self-center">
-              <motion.svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                animate={{ rotate: isExpanded ? 180 : 0 }}
-                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              >
-                <path
-                  d="M4 6L8 10L12 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </motion.svg>
             </div>
           </div>
         </div>
 
-        {/* Quick Stats Bar */}
-        {(stock.volume || stock.marketCap || stock.dataSource || renkoInfo) && (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-3.5 border-t border-slate-200/60 text-xs">
-            {stock.volume && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400 font-medium">Vol:</span>
-                <span className="font-bold text-slate-700">{stock.volume}</span>
-              </div>
-            )}
-            {stock.marketCap && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400 font-medium">Cap:</span>
-                <span className="font-bold text-slate-700">{stock.marketCap}</span>
-              </div>
-            )}
-            {renkoInfo && (
-              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-800 font-bold text-xs">
-                <span>Renko:</span>
-                <span>{renkoInfo.currentTrend.toUpperCase()} ({renkoInfo.brickSize} Brick)</span>
-                {renkoInfo.isAthBreakout && (
-                  <span className="bg-purple-600 text-white px-1.5 rounded text-[9px] font-extrabold uppercase">
-                    ATH BREAKOUT
-                  </span>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 ml-auto">
-              <span className="text-slate-400 font-medium">R:R Ratio:</span>
-              <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
+        {/* SUB-INFO — name + sector + signal badge (moved here for more space) */}
+        <div
+          className="border-t border-[color:var(--card-divider)]"
+          style={{ 
+            padding: 'clamp(0.375rem, 1.5cqi, 0.625rem) clamp(0.875rem, 3.2cqi, 1.25rem)',
+            fontSize: 'clamp(10px, 2.4cqi, 12px)' 
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[color:var(--text-tertiary)]">
+                {displayValue(stock.name)}
+              </p>
+              {stock.sector && (
+                <p className="hidden sm:block truncate text-[color:var(--text-quaternary)] mt-0.5">
+                  {displayValue(stock.sector)}
+                </p>
+              )}
+            </div>
+            {/* Signal badge moved here for more horizontal space */}
+            <SignalBadge type={stock.signal} size="sm" />
+          </div>
+        </div>
+
+
+        {/* SUB-ROW — meta line + chevron, separated by 1px hairline */}
+        <div
+          className="flex items-center justify-between gap-4 border-t border-[color:var(--card-divider)]"
+          style={{ 
+            padding: 'clamp(0.375rem, 1.4cqi, 0.625rem) clamp(0.875rem, 3.2cqi, 1.25rem)',
+            minHeight: 'clamp(36px, 3.4cqi + 8px, 44px)' 
+          }}
+        >
+          {/* Left: metrics */}
+          <div
+            className="flex items-center gap-3 text-[color:var(--text-tertiary)] min-w-0"
+            style={{ fontSize: 'clamp(10px, 2.4cqi, 12px)' }}
+          >
+            <span className="inline-flex items-center gap-1 shrink-0 font-medium">
+              <span>R:R</span>
+              <span className="font-extrabold text-[color:var(--text-primary)] tabular-nums">
                 1:{rrRatio}
               </span>
-            </div>
+              <InfoTooltip
+                label="Risk to Reward"
+                content="Distance from entry to stop loss vs. entry to target 1. Higher means more upside per rupee risked."
+                size="sm"
+              />
+            </span>
+            <span className="text-[color:var(--text-quaternary)] select-none">·</span>
+            {volumeText && (
+              <span className="hidden sm:inline-flex items-center gap-1">
+                <span className="truncate text-[color:var(--text-secondary)] font-semibold">
+                  {volumeLabel} {volumeText}
+                </span>
+              </span>
+            )}
+          </div>
+
+          {/* Right: upside + chevron */}
+          <div className="flex items-center gap-2 shrink-0">
+            {upsidePercent > 0 && (
+              <span
+                className="inline-flex items-center gap-1 font-extrabold text-[color:var(--text-secondary)]"
+                style={{ fontSize: 'clamp(9px, 2.2cqi, 11px)' }}
+              >
+                <span className="tabular-nums">+{upsidePercent.toFixed(1)}%</span>
+                <InfoTooltip
+                  label="Target 1 Upside"
+                  content="Percent change from the current price to the strategy's first target."
+                  size="sm"
+                />
+              </span>
+            )}
+            <motion.span
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="kite-card-icon text-[color:var(--text-tertiary)] group-hover:text-[color:var(--text-secondary)] shrink-0"
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 16 16" fill="none" width="100%" height="100%">
+                <path
+                  d="M4 6L8 10L12 6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </motion.span>
+          </div>
+        </div>
+
+        {/* Renko info row (only when present) — sits inside body with hairline above */}
+        {renkoInfo && (
+          <div
+            className="flex items-center gap-1.5 border-t border-[color:var(--card-divider)] text-[color:var(--text-secondary)]"
+            style={{ 
+              padding: 'clamp(0.375rem, 1.2cqi, 0.5rem) clamp(0.875rem, 3.2cqi, 1.25rem)',
+              fontSize: 'clamp(9px, 2.2cqi, 11px)' 
+            }}
+          >
+            <span className="font-extrabold uppercase tracking-wider">
+              Renko: {renkoInfo.currentTrend.toUpperCase()}
+            </span>
+            <span className="text-[color:var(--text-quaternary)]">·</span>
+            <span className="text-[color:var(--text-tertiary)] font-semibold">
+              {renkoInfo.brickSize} brick
+            </span>
+            {renkoInfo.isAthBreakout && (
+              <span className="ml-auto font-extrabold uppercase tracking-wider text-[color:var(--text-primary)]">
+                ATH Breakout
+              </span>
+            )}
           </div>
         )}
-      </div>
 
-      {/* Expanded Signal Details Drawer */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden bg-white/40 backdrop-blur-md border-t border-white/60"
-          >
-            <div className="p-5 sm:p-6 space-y-5">
-              {/* Visual Price Range Gauge */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-semibold text-gray-500">
-                  <span>Price Target Range</span>
-                  <span className="text-blue-600">Entry: {formatPrice(stock.signalDetails.entry)}</span>
-                </div>
-
-                <div className="relative h-3 w-full bg-gray-200/80 rounded-full overflow-hidden p-0.5">
-                  {/* Target Zone Highlight */}
-                  <div
-                    className="absolute top-0 bottom-0 bg-emerald-500/20 rounded-full border-l border-r border-emerald-400"
-                    style={{
-                      left: `${entryPos}%`,
-                      width: `${Math.max(5, getPos(stock.signalDetails.target1) - entryPos)}%`,
-                    }}
-                  />
-                  {/* Current price marker */}
-                  <div
-                    className="absolute top-0 bottom-0 w-2.5 bg-blue-600 rounded-full shadow-md z-10 transition-all duration-500 -ml-1"
-                    style={{ left: `${currentPos}%` }}
-                    title={`Current: ${formatPrice(stock.currentPrice)}`}
-                  />
-                </div>
-
-                <div className="flex justify-between text-[11px] font-medium text-gray-400">
-                  <span className="text-rose-600 font-semibold">SL: {formatPrice(stock.signalDetails.stopLoss)}</span>
-                  <span className="text-emerald-600 font-semibold">T1: {formatPrice(stock.signalDetails.target1)}</span>
-                </div>
-              </div>
-
-              {/* Key Signal Metrics Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Entry Level</span>
-                  <span className="text-sm font-mono font-extrabold text-blue-700">
-                    {formatPrice(stock.signalDetails.entry)}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Stop Loss</span>
-                  <span className="text-sm font-mono font-extrabold text-rose-700">
-                    {formatPrice(stock.signalDetails.stopLoss)}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Target 1</span>
-                  <span className="text-sm font-mono font-extrabold text-emerald-700">
-                    {formatPrice(stock.signalDetails.target1)}
-                  </span>
-                </div>
-                {stock.signalDetails.target2 && (
-                  <div className="p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Target 2</span>
-                    <span className="text-sm font-mono font-extrabold text-emerald-700">
-                      {formatPrice(stock.signalDetails.target2)}
+        {/* EXPANDED DETAIL — animation reveals below the always-visible header */}
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+              className="overflow-hidden"
+            >
+              <div
+                className="kite-card-body space-y-5 border-t border-[color:var(--card-divider)]"
+                style={{ containerType: 'inline-size', containerName: 'stock-card-body' }}
+              >
+                {/* Price ladder — one labelled row per level, each value shown once,
+                    always connected to its marker. No duplicate price grid. */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[color:var(--text-tertiary)]">
+                    <span className="inline-flex items-center gap-1 font-bold uppercase tracking-wider">
+                      Price Range
+                      <InfoTooltip
+                        label="Price Range"
+                        content="Stop loss, entry, current price, and target 1 plotted on a normalized scale so you can see where the price sits in the strategy's expected move."
+                        size="sm"
+                      />
+                    </span>
+                    <span className="text-[color:var(--text-secondary)] font-bold tabular-nums normal-case tracking-normal">
+                      {rrRatio} R:R
                     </span>
                   </div>
-                )}
-              </div>
 
-              {/* Strategy Rationale */}
-              <div className="p-4 rounded-xl bg-white border border-slate-200/80 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-600">
+                  <div
+                    className="rounded-xl border border-[color:var(--border-subtle)] px-3 py-3 space-y-3"
+                    style={{ backgroundColor: 'var(--ground-secondary)' }}
+                  >
+                    <LadderRow
+                      label="Stop Loss"
+                      markerPos={stopLossPos}
+                      markerColor="var(--hazard-red)"
+                      value={formatPrice(stock.signalDetails.stopLoss)}
+                    />
+                    <LadderRow
+                      label="Entry"
+                      markerPos={entryPos}
+                      markerColor="var(--text-primary)"
+                      value={formatPrice(stock.signalDetails.entry)}
+                    />
+                    <LadderRow
+                      label="Current"
+                      markerPos={currentPos}
+                      markerColor="var(--accent-blue)"
+                      value={formatPrice(stock.currentPrice)}
+                    />
+                    <LadderRow
+                      label="Target 1"
+                      markerPos={target1Pos}
+                      markerColor="var(--success-green)"
+                      value={formatPrice(stock.signalDetails.target1)}
+                    />
+                  </div>
+                </div>
+
+                {/* Target 2 — the one level the ladder does not carry. Shown
+                    only when the strategy produced a second target; R:R already
+                    lives in the always-visible sub-row, so nothing duplicates. */}
+                {stock.signalDetails.target2 !== undefined && (
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <MetricCell
+                      label="Target 2"
+                      value={formatPrice(stock.signalDetails.target2)}
+                    />
+                  </div>
+                )}
+
+                {/* Rationale — full-width flow section, no nested card. */}
+                <div className="space-y-2.5">
+                  <div className="inline-flex items-center gap-1.5 text-[color:var(--text-secondary)] font-extrabold uppercase tracking-wider">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      aria-hidden="true"
+                    >
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
-                    <span>Strategy Rationale & Setup</span>
+                    Rationale
                   </div>
+                  <p
+                    className="leading-relaxed text-[color:var(--text-secondary)] font-medium break-words"
+                    style={{ fontSize: 'clamp(11px, 2.8cqi, 13px)' }}
+                  >
+                    {stock.signalDetails.rationale}
+                  </p>
+                </div>
 
-                  {onOpenPositionCalculator && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenPositionCalculator(stock);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-98"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                      <span>Position Calculator</span>
-                    </button>
-                  )}
-                  {onOpenExecuteModal && (
+                {/* Anchored action row — the Execute CTA rests at the bottom of
+                    the card, not inlined with a section header. */}
+                {onOpenExecuteModal && (
+                  <div className="pt-1">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onOpenExecuteModal(stock);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-98"
+                      disabled={isPaperOnly}
+                      className="w-full py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        backgroundColor: 'var(--accent-blue)',
+                        color: 'var(--accent-fg)',
+                        fontSize: 'clamp(11px, 2.8cqi, 13px)',
+                      }}
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
-                      <span>Execute Trade</span>
+                      <Icon name="arrow-right" size={16} strokeWidth={2.5} />
+                      {isPaperOnly ? "Paper Mode — Orders Disabled" : "Execute"}
                     </button>
-                  )}
-                </div>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium pt-0.5">
-                  {stock.signalDetails.rationale}
-                </p>
+                  </div>
+                )}
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
+function LadderRow({
+  label,
+  markerPos,
+  markerColor,
+  value,
+}: {
+  label: string;
+  markerPos: number;
+  markerColor: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-wider tabular-nums"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        {label}
+      </span>
+      <div
+        className="relative h-1.5 flex-1 rounded-full"
+        style={{ backgroundColor: 'var(--border-subtle)' }}
+      >
+        <span
+          className="absolute top-1/2 w-2.5 h-2.5 rounded-full border-2 border-[color:var(--ground)]"
+          style={{
+            left: `${markerPos}%`,
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: markerColor,
+          }}
+          aria-hidden="true"
+        />
+      </div>
+      <span
+        className="w-20 shrink-0 text-right font-mono font-extrabold tabular-nums"
+        style={{ color: 'var(--text-primary)', fontSize: 'clamp(11px, 2.8cqi, 13px)' }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function MetricCell({
+  label,
+  value,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  tooltip?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1 text-[color:var(--text-tertiary)] font-bold uppercase tracking-wider mb-1 truncate">
+        <span className="truncate">{label}</span>
+        {tooltip && <InfoTooltip label={label} content={tooltip} size="sm" />}
+      </div>
+      <span
+        className="block font-mono font-extrabold tabular-nums text-[color:var(--text-primary)] truncate"
+        style={{ fontSize: 'clamp(12px, 3.2cqi, 14px)' }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }

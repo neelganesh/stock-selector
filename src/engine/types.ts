@@ -47,9 +47,10 @@ export interface RawStockData {
   symbol: string;
   name: string;
   sector: string;
+  industry?: string | null;
   capCategory: CapCategory;
   tradingSegment?: TradingSegment;
-  marketCapVal: number; // in Cr
+  marketCapVal: number; // in Cr. Optional — scanner fetches live volume at scan time.
   volumeVal: number;
   prices: number[]; // Daily close prices over last 200 days
   volumeHistory: number[];

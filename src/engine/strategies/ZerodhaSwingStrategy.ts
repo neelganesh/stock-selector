@@ -106,7 +106,13 @@ export const ZerodhaSwingStrategy: StrategyDefinition = {
     const formattedVol = lastVol >= 1000000 
       ? (lastVol / 1000000).toFixed(1) + 'M' 
       : (lastVol / 1000).toFixed(0) + 'K';
-    const formattedCap = '₹' + (stock.marketCapVal / 1000).toFixed(1) + 'K Cr';
+    const capVal = typeof stock.marketCapVal === 'number' && !isNaN(stock.marketCapVal) ? stock.marketCapVal : 0;
+    const formattedCap = capVal > 0 ? '₹' + (capVal / 1000).toFixed(1) + 'K Cr' : 'N/A';
+
+    const sectorKnown = !!stock.sector && stock.sector !== 'Unknown';
+    const sectorClause = sectorKnown
+      ? `Outperforming ${stock.sector} Equal-Weighted NAV by +${relativeStrengthVsSector}%.`
+      : `Outperforming its sector Equal-Weighted NAV by +${relativeStrengthVsSector}%.`;
 
     return {
       id: `${stock.symbol}-zerodha`,
@@ -124,7 +130,7 @@ export const ZerodhaSwingStrategy: StrategyDefinition = {
         stopLoss: safeStopLoss,
         target1,
         target2,
-        rationale: `Outperforming ${stock.sector} Equal-Weighted NAV by +${relativeStrengthVsSector}%. Price trading near 20 EMA (₹${ema20}) & 50 EMA (₹${ema50}) with Renko ATH breakout status: ${renko.isAthBreakout ? 'YES' : 'NO'}. Volume ratio at ${volumeRatio}x 20-day average.`,
+        rationale: `${sectorClause} Price trading near 20 EMA (₹${ema20}) & 50 EMA (₹${ema50}) with Renko ATH breakout status: ${renko.isAthBreakout ? 'YES' : 'NO'}. Volume ratio at ${volumeRatio}x 20-day average.`,
         indicators: {
           rsi,
           ema20,

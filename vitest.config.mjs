@@ -4,6 +4,7 @@ export default defineConfig({
   root: '.',
   esbuild: {
     target: 'es2022',
+    jsx: 'automatic',
   },
   resolve: {
     preserveSymlinks: false,

@@ -56,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('[Auth] onAuthStateChange:', { event: _event, hasSession: !!session, user: session?.user?.email });
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
@@ -69,13 +70,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
-    if (!supabase) return { error: new Error('Supabase not configured') };
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    console.log('[Auth] signIn called with:', email);
+    if (!supabase) {
+      console.error('[Auth] Supabase not configured');
+      return { error: new Error('Supabase not configured') };
+    }
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('[Auth] signInWithPassword result:', { data, error });
+      return { error };
+    } catch (err) {
+      console.error('[Auth] signIn exception:', err);
+      return { error: err };
+    }
   };
 
   const signUp = async (email: string, password: string, fullName?: string) => {
-    if (!supabase) return { error: new Error('Supabase not configured') };
+    console.log('[Auth] signUp called with:', email);
+    if (!supabase) {
+      console.error('[Auth] Supabase not configured');
+      return { error: new Error('Supabase not configured') };
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,

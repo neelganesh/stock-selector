@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './GlassCard';
-import { TradeJournalEditor } from './TradeJournalEditor';
-import type { TradeJournalSavePayload } from './TradeJournalEditor';
+import { Icon, type IconName } from './Icon';
 import { useToast } from './useToast';
+import { authFetchJSON, authFetch } from '../lib/authFetch';
 
 interface Execution {
   id: string;
@@ -47,19 +47,20 @@ interface CashFlow {
 
 interface ExecutionTrackerProps {
   isLoggedIn: boolean;
-  onLoginClick: () => void;
+  isPaperOnly?: boolean;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  pending_entry: { label: 'Pending Entry', color: 'text-amber-700', bg: 'bg-amber-50', icon: '⏳' },
-  entry_filled: { label: 'Entry Filled', color: 'text-blue-700', bg: 'bg-blue-50', icon: '✅' },
-  gtt_placed: { label: 'GTT Active', color: 'text-indigo-700', bg: 'bg-indigo-50', icon: '🎯' },
-  target1_hit: { label: 'Target 1 Hit', color: 'text-emerald-700', bg: 'bg-emerald-50', icon: '🎯' },
-  target2_hit: { label: 'Target 2 Hit', color: 'text-emerald-700', bg: 'bg-emerald-50', icon: '🎯' },
-  stop_loss_hit: { label: 'Stop Loss Hit', color: 'text-rose-700', bg: 'bg-rose-50', icon: '🛑' },
-  partial_exit: { label: 'Partial Exit', color: 'text-teal-700', bg: 'bg-teal-50', icon: '📊' },
-  manually_exited: { label: 'Exited', color: 'text-slate-700', bg: 'bg-slate-50', icon: '📤' },
-  cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-100', icon: '❌' },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: IconName }> = {
+  pending: { label: 'Pending Entry', color: 'text-amber-700', bg: 'bg-amber-50', icon: 'clock' },
+  entry_placed: { label: 'Entry Placed', color: 'text-blue-700', bg: 'bg-blue-50', icon: 'clock' },
+  entry_filled: { label: 'Entry Filled', color: 'text-blue-700', bg: 'bg-blue-50', icon: 'check' },
+  gtt_placed: { label: 'GTT Active', color: 'text-indigo-700', bg: 'bg-indigo-50', icon: 'target' },
+  target1_hit: { label: 'Target 1 Hit', color: 'text-emerald-700', bg: 'bg-emerald-50', icon: 'target' },
+  target2_hit: { label: 'Target 2 Hit', color: 'text-emerald-700', bg: 'bg-emerald-50', icon: 'target' },
+  stop_loss_hit: { label: 'Stop Loss Hit', color: 'text-rose-700', bg: 'bg-rose-50', icon: 'stop' },
+  manually_exited: { label: 'Exited', color: 'text-slate-700', bg: 'bg-slate-50', icon: 'logout' },
+  cancelled: { label: 'Cancelled', color: 'text-slate-500', bg: 'bg-slate-100', icon: 'x' },
+  rejected: { label: 'Rejected', color: 'text-rose-700', bg: 'bg-rose-50', icon: 'x' },
 };
 
 const formatCurrency = (value: number) => {
@@ -87,11 +88,12 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerProps) {
+export function ExecutionTracker({ isLoggedIn, isPaperOnly = false }: ExecutionTrackerProps) {
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const toast = useToast();
 
   const fetchExecutions = async () => {
@@ -103,60 +105,45 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
 
     try {
       // Fetch both live executions and paper positions in parallel
-      const [execRes, paperRes] = await Promise.all([
-        fetch('/api/executions'),
-        fetch('/api/paper-positions'),
+      const [liveExecutions, paperPositions] = await Promise.all([
+        authFetchJSON<any[]>('/api/executions'),
+        authFetchJSON<any[]>('/api/paper-positions'),
       ]);
 
-      const executions: Execution[] = [];
-      const paperItems: any[] = [];
-
-      if (execRes.ok) {
-        const data = await execRes.json();
-        executions.push(...data);
-      } else if (execRes.status !== 401) {
-        console.warn('Failed to fetch live executions');
-      }
-
-      if (paperRes.ok) {
-        const data = await paperRes.json();
-        // Map paper positions to Execution shape for unified rendering
-        for (const p of data) {
-          executions.push({
-            id: `paper_${p.id}`,
-            strategy_id: p.strategy_id,
-            strategy_name: p.strategy_name,
-            symbol: p.symbol,
-            exchange: 'NSE',
-            entry_price: p.entry_price,
-            stop_loss: p.stop_loss,
-            target1: p.target1,
-            target2: p.target2,
-            quantity: p.quantity,
-            product: 'CNC',
-            risk_amount: p.risk_amount,
-            risk_pct: p.risk_pct,
-            capital_allocated: p.entry_price * p.quantity,
-            charges_estimate: p.charges_estimate,
-            status: p.status,
-            entry_filled_price: p.entry_filled_price,
-            entry_filled_at: p.entry_filled_at,
-            exit_filled_price: p.exit_filled_price,
-            exit_filled_at: p.exit_filled_at,
-            total_charges: p.total_charges,
-            realized_pnl: p.realized_pnl,
-            created_at: p.created_at,
-            updated_at: p.updated_at,
-            notes: p.notes,
-            tags: p.tags,
-          } as Execution);
-        }
-        paperItems.push(...data);
-      } else if (paperRes.status !== 401) {
-        console.warn('Failed to fetch paper positions');
+      const executions: Execution[] = liveExecutions.map(e => ({ ...e, capital_allocated: e.entry_price * e.quantity }));
+      for (const p of paperPositions) {
+        executions.push({
+          id: `paper_${p.id}`,
+          strategy_id: p.strategy_id,
+          strategy_name: p.strategy_name,
+          symbol: p.symbol,
+          exchange: 'NSE',
+          entry_price: p.entry_price,
+          stop_loss: p.stop_loss,
+          target1: p.target1,
+          target2: p.target2,
+          quantity: p.quantity,
+          product: 'CNC',
+          risk_amount: p.risk_amount,
+          risk_pct: p.risk_pct,
+          capital_allocated: p.entry_price * p.quantity,
+          charges_estimate: p.charges_estimate,
+          status: p.status,
+          entry_filled_price: p.entry_filled_price,
+          entry_filled_at: p.entry_filled_at,
+          exit_filled_price: p.exit_filled_price,
+          exit_filled_at: p.exit_filled_at,
+          total_charges: p.total_charges,
+          realized_pnl: p.realized_pnl,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          notes: p.notes,
+          tags: p.tags,
+        } as Execution);
       }
 
       setExecutions(executions);
+      setLastUpdated(new Date());
     } catch (err) {
       console.error('Fetch executions error:', err);
     } finally {
@@ -174,10 +161,12 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
   const filteredExecutions = executions.filter((ex) => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'open') {
-      return ['pending_entry', 'entry_filled', 'gtt_placed', 'target1_hit', 'partial_exit'].includes(ex.status);
+      // Canonical schema enums (strategy_executions + paper_positions).
+      // 'pending' (not 'pending_entry'); no 'partial_exit' status exists.
+      return ['pending', 'entry_placed', 'entry_filled', 'gtt_placed', 'target1_hit', 'target2_hit'].includes(ex.status);
     }
     if (activeFilter === 'closed') {
-      return ['target1_hit', 'target2_hit', 'stop_loss_hit', 'manually_exited', 'cancelled'].includes(ex.status);
+      return ['target2_hit', 'stop_loss_hit', 'manually_exited', 'cancelled', 'rejected'].includes(ex.status);
     }
     return true;
   });
@@ -188,9 +177,8 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
       const realId = isPaper ? execution.id.replace('paper_', '') : execution.id;
       const endpoint = isPaper ? `/api/paper-positions/${realId}` : `/api/executions/${execution.id}`;
 
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status,
           exit_filled_price: exitPrice,
@@ -213,9 +201,7 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
       const realId = isPaper ? execution.id.replace('paper_', '') : execution.id;
       const endpoint = isPaper ? `/api/paper-positions/${realId}` : `/api/executions/${execution.id}`;
 
-      const response = await fetch(endpoint, {
-        method: 'DELETE',
-      });
+      const response = await authFetch(endpoint, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to cancel execution');
       toast.success(`Execution for ${execution.symbol} cancelled`);
       fetchExecutions();
@@ -223,29 +209,6 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
       console.error('Cancel error:', err);
       toast.error('Failed to cancel execution');
     }
-  };
-
-  const handleJournalSave = async (
-    execution: Execution,
-    payload: TradeJournalSavePayload
-  ) => {
-    const isPaper = execution.id.startsWith('paper_');
-    const realId = isPaper ? execution.id.replace('paper_', '') : execution.id;
-    const endpoint = isPaper ? `/api/paper-positions/${realId}` : `/api/executions/${execution.id}`;
-
-    const response = await fetch(endpoint, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notes: payload.notes, tags: payload.tags }),
-    });
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(errBody || 'Failed to save journal');
-    }
-    // Optimistic local update so the editor exits cleanly without a full refetch flash
-    setExecutions((prev) =>
-      prev.map((e) => (e.id === execution.id ? { ...e, notes: payload.notes, tags: payload.tags } : e))
-    );
   };
 
   const getUnrealizedPnL = (execution: Execution) => {
@@ -261,19 +224,15 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
   if (!isLoggedIn) {
     return (
       <GlassCard variant="default" padding="lg" className="text-center">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4 text-slate-400">
+        <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4 text-[color:var(--text-tertiary)]">
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
         </div>
         <h3 className="text-lg font-bold text-slate-900 mb-1">Strategy Execution Tracker</h3>
-        <p className="text-sm text-slate-500 mb-4">Login to Zerodha to track your executed strategies</p>
-        <button
-          onClick={onLoginClick}
-          className="px-4 py-2 rounded-xl bg-orange-600 text-white text-sm font-bold hover:bg-orange-700 transition-colors"
-        >
-          Connect Zerodha
-        </button>
+        <p className="text-sm text-slate-500">
+          Connect Zerodha from the header to track your executed strategies.
+        </p>
       </GlassCard>
     );
   }
@@ -283,14 +242,14 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
       <GlassCard variant="default" padding="lg">
         <div className="space-y-3">
           {[1, 2, 3].map((n) => (
-            <div key={n} className="h-20 rounded-xl bg-slate-100 animate-pulse" />
+            <div key={n} className="h-20 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] animate-pulse" />
           ))}
         </div>
       </GlassCard>
     );
   }
 
-  const openExecutions = executions.filter((e) => ['pending_entry', 'entry_filled', 'gtt_placed', 'target1_hit', 'partial_exit'].includes(e.status));
+  const openExecutions = executions.filter((e) => ['pending', 'entry_placed', 'entry_filled', 'gtt_placed', 'target1_hit', 'target2_hit'].includes(e.status));
   const totalPnL = executions.reduce((sum, e) => sum + (e.realized_pnl || 0) + getUnrealizedPnL(e), 0);
   const totalRisk = openExecutions.reduce((sum, e) => sum + e.risk_amount, 0);
 
@@ -309,9 +268,19 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
             <span className={`text-sm font-bold ${totalPnL >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               {totalPnL >= 0 ? '+' : ''}{formatCurrency(totalPnL)}
             </span>
+            {lastUpdated && (
+              <span
+                className="text-[11px] text-slate-400 hidden sm:inline"
+                data-testid="executions-last-updated"
+                title={lastUpdated.toISOString()}
+              >
+                Updated {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
             <button
               onClick={fetchExecutions}
               disabled={isLoading}
+              aria-label="Refresh executions"
               className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
             >
               <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -322,7 +291,7 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex gap-1 p-1 rounded-xl bg-slate-50/50 border border-slate-200/60">
+        <div className="flex gap-1 p-1 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] border border-[color:var(--border-subtle)]">
           {(['all', 'open', 'closed'] as const).map((filter) => (
             <button
               key={filter}
@@ -385,12 +354,16 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className="font-bold text-slate-900">{execution.symbol}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${STATUS_CONFIG[execution.status]?.color || 'text-slate-600'} ${STATUS_CONFIG[execution.status]?.bg || 'bg-slate-100'}`}>
-                        {STATUS_CONFIG[execution.status]?.label || execution.status}
-                      </span>
+                      {STATUS_CONFIG[execution.status] && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${STATUS_CONFIG[execution.status].color} ${STATUS_CONFIG[execution.status].bg}`}>
+                          <Icon name={STATUS_CONFIG[execution.status].icon} size={11} strokeWidth={2.5} />
+                          {STATUS_CONFIG[execution.status].label}
+                        </span>
+                      )}
                       {execution.id.startsWith('paper_') && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">
-                          📝 PAPER
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-700 border border-violet-200">
+                          <Icon name="note" size={11} strokeWidth={2.5} />
+                          PAPER
                         </span>
                       )}
                       <span className="text-xs text-slate-400">{execution.strategy_name}</span>
@@ -462,7 +435,13 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
 
                 {/* Action Buttons */}
                 <div className="mt-3 flex items-center gap-2 pt-3 border-t border-slate-100">
-                  {['pending_entry', 'entry_filled', 'gtt_placed'].includes(execution.status) && (
+                  {isPaperOnly && !execution.id.startsWith('paper_') && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 whitespace-nowrap">Paper Mode — Real orders disabled</span>
+                  )}
+                  {isPaperOnly && !execution.id.startsWith('paper_') && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Paper Mode — Real orders disabled</span>
+                  )}
+                  {['pending', 'entry_filled', 'gtt_placed'].includes(execution.status) && (
                     <>
                       <button
                         onClick={() => handleExit(execution, execution.target1, 'target1_hit')}
@@ -505,7 +484,7 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
                     </>
                   )}
 
-                  {execution.status === 'pending_entry' && (
+                  {execution.status === 'pending' && (
                     <button
                       onClick={() => handleCancel(execution)}
                       className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors"
@@ -551,17 +530,6 @@ export function ExecutionTracker({ isLoggedIn, onLoginClick }: ExecutionTrackerP
                   )}
                 </AnimatePresence>
 
-                {/* Trade Journal */}
-                {expandedId === execution.id && (
-                  <div className="mt-3 pt-3 border-t border-slate-100">
-                    <TradeJournalEditor
-                      executionId={execution.id}
-                      initialNotes={execution.notes ?? ''}
-                      initialTags={execution.tags ?? []}
-                      onSave={(payload) => handleJournalSave(execution, payload)}
-                    />
-                  </div>
-                )}
               </motion.div>
             ))}
           </AnimatePresence>

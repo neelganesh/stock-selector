@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './GlassCard';
+import { Icon } from './Icon';
 
 // ---------- Types ----------
 export interface GTTOrder {
@@ -183,10 +184,11 @@ export function GTTMonitor({ pollIntervalMs = 30000, defaultFilter = 'active' }:
           <button
             type="button"
             onClick={() => fetchGtts()}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition inline-flex items-center gap-1.5"
             aria-label="Refresh"
           >
-            ↻ Refresh
+            <Icon name="refresh" size={13} strokeWidth={2.2} />
+            Refresh
           </button>
         </div>
       </header>
@@ -198,21 +200,23 @@ export function GTTMonitor({ pollIntervalMs = 30000, defaultFilter = 'active' }:
       )}
 
       {!loading && needsLogin && (
-        <div className="py-6 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm text-center">
+        <div className="py-6 px-4 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] border border-[color:var(--border-subtle)] text-[color:var(--text-primary)] text-sm text-center">
           Please log in to your Zerodha account to view GTTs.
         </div>
       )}
 
       {!loading && !needsLogin && error && (
-        <div role="alert" className="py-6 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm text-center">
+        <div role="alert" className="py-6 px-4 rounded-[var(--card-radius)] bg-[color:var(--ground-secondary)] border border-[color:var(--negative)]/30 text-[color:var(--negative)] text-sm text-center">
           {error}
         </div>
       )}
 
       {!loading && !needsLogin && !error && visible.length === 0 && (
         <div className="py-10 text-center text-sm text-slate-400">
-          <div className="text-3xl mb-2">🎯</div>
-          No GTTs to show. Active triggers will appear here.
+          <span className="inline-flex items-center justify-center w-12 h-12 mb-2 rounded-full bg-slate-100 text-slate-400">
+            <Icon name="target" size={26} strokeWidth={1.8} />
+          </span>
+          <div>No GTTs to show. Active triggers will appear here.</div>
         </div>
       )}
 
@@ -231,7 +235,7 @@ export function GTTMonitor({ pollIntervalMs = 30000, defaultFilter = 'active' }:
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   data-gtt-row
-                  className={`flex items-center justify-between gap-4 p-3.5 rounded-xl bg-white/60 backdrop-blur ring-1 ring-slate-200/70 hover:ring-2 ${status.ring} transition`}
+                  className={`flex items-center justify-between gap-4 p-3.5 rounded-[var(--card-radius)] bg-[color:var(--ground)] border border-[color:var(--border-subtle)] hover:border-[color:var(--border-default)] transition-colors`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

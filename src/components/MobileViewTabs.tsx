@@ -26,7 +26,7 @@ export function MobileViewTabs({ tabs, activeTab, onChange }: MobileViewTabsProp
     >
       {tabs.map((t) => {
         const isActive = t.id === activeTab;
-        const baseBtn = 'flex-shrink-0 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer';
+        const baseBtn = 'flex-shrink-0 rounded-[var(--card-radius)] text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer';
         const stateClasses = isActive
           ? 'bg-slate-900 text-white shadow-md'
           : 'bg-white/60 hover:bg-white text-slate-600 border border-slate-200';

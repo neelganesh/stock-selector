@@ -1,9 +1,17 @@
 import type { FC } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useStrategy } from '../context/StrategyContext';
 import type { CapCategory } from '../engine/types';
 import { ThemeToggle } from './ThemeToggle';
+import { Icon } from './Icon';
+import { useToast } from './useToast';
 
-export const Sidebar: FC = () => {
+interface SidebarProps {
+  activeTab?: string;
+}
+
+export const Sidebar: FC<SidebarProps> = ({ activeTab }) => {
+  const isSignalsTab = activeTab === 'signals' || !activeTab;
   const {
     strategies,
     activeStrategyId,
@@ -11,11 +19,20 @@ export const Sidebar: FC = () => {
     capCategory,
     setCapCategory,
     isScanning,
-    progress,
-    activeDataSource,
-    setIsZerodhaModalOpen,
     runScan,
   } = useStrategy();
+  const toast = useToast();
+  const prefersReducedMotion = useReducedMotion();
+
+  const runScanWithToast = async () => {
+    if (isScanning) return;
+    try {
+      await runScan();
+      toast.success('Scan complete.');
+    } catch (err: any) {
+      toast.error(`Scan failed: ${err?.message || 'Unknown error'}`);
+    }
+  };
 
   const capOptions: { id: CapCategory; label: string; sub: string }[] = [
     { id: 'all', label: 'All Market Caps', sub: 'Full Universe (~30 Stocks)' },
@@ -24,85 +41,63 @@ export const Sidebar: FC = () => {
     { id: 'small', label: 'Small Cap', sub: 'High Alpha Nifty 250' },
   ];
 
-  const isKiteLive = activeDataSource.includes('Kite');
-
   return (
-    <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0 flex flex-col gap-6 p-4 lg:p-6 vision-glass rounded-2xl border border-white/60 shadow-xl shadow-slate-200/50">
-      {/* Sleek Monochrome Header Icon & Brand */}
-      <div className="flex items-center justify-between pb-5 border-b border-slate-200/60">
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-900/20 ring-1 ring-slate-800">
-            {/* Sleek geometric glass icon */}
-            <svg
-              className="w-5 h-5 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-              />
-            </svg>
-          </div>
-          <div>
-            <h1 className="font-semibold text-slate-900 text-base leading-tight tracking-tight">
-              Quant Vision
-            </h1>
-            <p className="text-xs text-slate-500 font-medium">Algorithmic Screener</p>
-          </div>
-        </div>
-        </div>
-
-        <button
-          onClick={() => setIsZerodhaModalOpen(true)}
-          className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-all cursor-pointer flex items-center gap-1 ${
-            isKiteLive
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-              : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-          }`}
-          title="Click to configure Zerodha Kite API"
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${isKiteLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-          <span>{isKiteLive ? 'Kite API Live' : 'yfinance'}</span>
-        </button>
+    <aside className="w-full lg:w-72 xl:w-80 flex-shrink-0 flex flex-col gap-6 p-4 lg:p-6 kite-card">
+      {/* Theme toggle + section label. The Kite/yfinance status pill used to
+          be duplicated here; it now lives only in the top bar, so the data
+          source is stated exactly once in the app. */}
+      <div className="flex items-center justify-between pb-5 border-b border-[color:var(--card-divider)]">
+        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+          {isSignalsTab ? 'Algorithmic Screener' : 'Navigation'}
+        </p>
+        <ThemeToggle />
       </div>
 
-      {/* Strategy Selector Menu (Zerodha Swing 1st) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Strategy Selector
-          </span>
-          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-            Pluggable Modules
-          </span>
-        </div>
+      {/* Only show strategy/scan controls on signals tab */}
+      {isSignalsTab && (
+        <>
+          {/* Strategy Selector Menu */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                Strategy Selector
+              </span>
+              <button
+                onClick={runScanWithToast}
+                disabled={isScanning}
+                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                style={{
+                  color: isScanning ? 'var(--text-tertiary)' : 'var(--accent-brand)',
+                  backgroundColor: isScanning ? 'var(--elevated-2)' : 'var(--accent-brand-bg, rgba(59,130,246,0.12))',
+                  border: '1px solid var(--border-subtle)',
+                }}
+                aria-label={isScanning ? 'Scanning in progress' : 'Rescan now'}
+              >
+                <svg className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                {isScanning ? 'Scanning' : 'Rescan'}
+              </button>
+            </div>
 
-        <nav className="flex flex-col gap-2">
-          {strategies.map((strat, index) => {
-            const isActive = strat.id === activeStrategyId;
+            <nav className="flex flex-col gap-2">
+              {strategies.map((strat, index) => {
+                const isActive = strat.id === activeStrategyId;
             return (
               <button
                 key={strat.id}
                 onClick={() => setActiveStrategyId(strat.id)}
-                className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 flex flex-col gap-1.5 border ${
+                className={`w-full text-left p-3 transition-colors duration-150 flex flex-col gap-1.5 border border-transparent ${
                   isActive
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/15 scale-[1.01]'
-                    : 'bg-white/50 hover:bg-white text-slate-700 border-slate-200/60 hover:border-slate-300'
+                    ? 'bg-[color:var(--ground-secondary)] text-[color:var(--text-primary)] border-[color:var(--border-default)]'
+                    : 'hover:bg-[color:var(--card-bg-hover)] text-[color:var(--text-primary)]'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span
-                      className={`text-[11px] font-extrabold w-5 h-5 rounded-full inline-flex items-center justify-center shrink-0 ${
+                      className={`text-[11px] font-extrabold w-5 h-5 inline-flex items-center justify-center shrink-0 ${
                         isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          ? 'text-[color:var(--text-primary)]'
+                          : 'text-[color:var(--text-tertiary)]'
                       }`}
                     >
                       {index + 1}
@@ -111,22 +106,11 @@ export const Sidebar: FC = () => {
                       {strat.name}
                     </span>
                   </div>
-                  {index === 0 && (
-                    <span
-                      className={`text-[10px] font-extrabold px-2 py-0.5 rounded shrink-0 ${
-                        isActive
-                          ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/40'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      }`}
-                    >
-                      Zerodha
-                    </span>
-                  )}
+                  {/* Zerodha label removed */}
                 </div>
                 <p
-                  className={`text-xs pl-7.5 line-clamp-1 font-medium ${
-                    isActive ? 'text-slate-300' : 'text-slate-500'
-                  }`}
+                  className="text-xs pl-7.5 line-clamp-1 font-medium"
+                  style={{ color: 'var(--text-primary)' }}
                 >
                   {strat.category}
                 </p>
@@ -136,11 +120,17 @@ export const Sidebar: FC = () => {
         </nav>
       </div>
 
-      {/* Market Cap Universe Selector */}
+      {/* Scan Universe — this is the *input* to the scan (which stocks get
+          fetched). The cap pills in the results toolbar only refine what is
+          already on screen; naming them differently stops the two reading
+          as the same control duplicated. */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Market Cap Scope
+        <div className="flex flex-col gap-0.5 px-1">
+          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+            Scan Universe
+          </span>
+          <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+            Which stocks the engine fetches
           </span>
         </div>
 
@@ -151,17 +141,21 @@ export const Sidebar: FC = () => {
               <button
                 key={opt.id}
                 onClick={() => setCapCategory(opt.id)}
-                className={`p-3 rounded-xl text-left border flex flex-col justify-between h-[68px] transition-all ${
-                  isSelected
-                    ? 'bg-slate-900 text-white border-slate-900 font-extrabold shadow-sm'
-                    : 'bg-white/40 hover:bg-white text-slate-700 border-slate-200/60'
-                }`}
+                aria-pressed={isSelected}
+                title={opt.sub}
+                className="p-3 text-left border flex flex-col justify-between h-[68px] transition-colors rounded-lg"
+                style={{
+                  backgroundColor: isSelected ? 'var(--ground)' : 'transparent',
+                  borderColor: isSelected ? 'var(--accent-brand)' : 'var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                }}
               >
-                <span className="text-xs font-bold leading-snug">{opt.label}</span>
+                <span className={`text-xs leading-snug ${isSelected ? 'font-bold' : 'font-medium'}`}>
+                  {opt.label}
+                </span>
                 <span
-                  className={`text-[10px] font-extrabold ${
-                    isSelected ? 'text-slate-300' : 'text-slate-400'
-                  }`}
+                  className="text-[10px] font-bold"
+                  style={{ color: isSelected ? 'var(--accent-brand)' : 'var(--text-secondary)' }}
                 >
                   {opt.id.toUpperCase()}
                 </span>
@@ -170,80 +164,37 @@ export const Sidebar: FC = () => {
           })}
         </div>
       </div>
+      </>
+      )}
 
-      {/* Action: Run Parallel Engine Scan */}
+      {/* Action: Run Parallel Engine Scan.
+          The button reflects its own busy state and names the symbol being
+          processed. The canonical progress readout (percentage + progress
+          line) lives in the top bar so there is exactly one scan gauge. */}
       <div className="pt-2 mt-auto">
         <button
-          onClick={() => runScan()}
+          onClick={() => runScanWithToast()}
           disabled={isScanning}
-          className={`w-full py-3 px-4 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-md ${
-            isScanning
-              ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 active:scale-[0.99]'
-          }`}
+          aria-label={isScanning ? 'Scan in progress' : 'Run strategy scan'}
+          className="w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
+          style={{
+            backgroundColor: isScanning ? 'var(--elevated-3)' : 'var(--accent-brand)',
+            color: isScanning ? 'var(--text-secondary)' : '#fff',
+            cursor: isScanning ? 'not-allowed' : 'pointer',
+          }}
         >
-          {isScanning ? (
-            <>
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v8H4z"
-                />
-              </svg>
-              <span>Evaluating Engine...</span>
-            </>
-          ) : (
-            <>
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              <span>Run Parallel Scan</span>
-            </>
-          )}
+          <motion.span
+            className="flex items-center"
+            animate={isScanning && !prefersReducedMotion ? { rotate: 360 } : { rotate: 0 }}
+            transition={
+              isScanning && !prefersReducedMotion
+                ? { repeat: Infinity, ease: 'linear', duration: 0.9 }
+                : { duration: 0.2 }
+            }
+          >
+            <Icon name="refresh" size={16} />
+          </motion.span>
         </button>
-
-        {/* Real-time Progress Output */}
-        {isScanning && (
-          <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-            <div className="flex justify-between text-xs font-semibold text-slate-700">
-              <span>Scanning Stocks</span>
-              <span>{progress.percent}%</span>
-            </div>
-            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-              <div
-                className="bg-emerald-500 h-full transition-all duration-150"
-                style={{ width: `${progress.percent}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[11px] text-slate-500">
-              <span className="truncate max-w-[140px] font-mono">
-                {progress.currentSymbol || 'Processing...'}
-              </span>
-              <span>
-                {progress.scanned} / {progress.total}
-              </span>
-            </div>
-          </div>
-        )}
       </div>
     </aside>
   );

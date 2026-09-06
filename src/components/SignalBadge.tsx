@@ -7,44 +7,36 @@ interface SignalBadgeProps {
   size?: 'sm' | 'md';
 }
 
+/**
+ * Signal badge — the only place signal colour lives on the card.
+ * The dot is the hue (sky / violet / orchid / peach / rose) but the
+ * pill itself stays neutral glass. This way the card reads as
+ * "iOS 26 Liquid Glass" while the dot still communicates
+ * conviction at a glance.
+ */
 const signalConfig: Record<
   SignalType,
-  { label: string; bg: string; text: string; border: string; dot: string }
+  { label: string; dotVar: string }
 > = {
   'strong-buy': {
     label: 'Strong Buy',
-    bg: 'rgba(40, 205, 65, 0.12)',
-    text: '#1E8E2D',
-    border: 'rgba(40, 205, 65, 0.3)',
-    dot: '#28CD41',
+    dotVar: 'var(--signal-strong-buy)',
   },
   buy: {
     label: 'Buy',
-    bg: 'rgba(40, 205, 65, 0.08)',
-    text: '#24A137',
-    border: 'rgba(40, 205, 65, 0.22)',
-    dot: '#34C759',
+    dotVar: 'var(--signal-buy)',
   },
   hold: {
     label: 'Hold',
-    bg: 'rgba(255, 149, 0, 0.12)',
-    text: '#C67300',
-    border: 'rgba(255, 149, 0, 0.3)',
-    dot: '#FF9500',
+    dotVar: 'var(--signal-hold)',
   },
   sell: {
     label: 'Sell',
-    bg: 'rgba(255, 59, 48, 0.1)',
-    text: '#D72C21',
-    border: 'rgba(255, 59, 48, 0.25)',
-    dot: '#FF3B30',
+    dotVar: 'var(--signal-sell)',
   },
   'strong-sell': {
     label: 'Strong Sell',
-    bg: 'rgba(255, 59, 48, 0.16)',
-    text: '#B81A10',
-    border: 'rgba(255, 59, 48, 0.35)',
-    dot: '#D32F2F',
+    dotVar: 'var(--signal-strong-sell)',
   },
 };
 
@@ -52,28 +44,27 @@ export function SignalBadge({ type, size = 'md' }: SignalBadgeProps) {
   const config = signalConfig[type];
   const sizeClasses =
     size === 'sm'
-      ? 'px-2.5 py-0.5 text-xs tracking-wide'
+      ? 'px-2.5 py-0.5 text-[10px]'
       : 'px-3.5 py-1 text-xs font-semibold tracking-wide';
 
   return (
     <motion.span
-      className={`
-        inline-flex items-center gap-1.5
-        rounded-full font-semibold backdrop-blur-md
-        border shadow-xs ${sizeClasses}
-      `}
+      className={`inline-flex items-center gap-1.5 rounded-full font-medium ${sizeClasses}`}
       style={{
-        backgroundColor: config.bg,
-        color: config.text,
-        borderColor: config.border,
+        backgroundColor: 'var(--glass-bg-subtle)',
+        border: '1px solid var(--glass-border-subtle)',
+        color: 'var(--text-secondary)',
       }}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ scale: 1.02 }}
+      transition={{ duration: 0.15 }}
     >
       <span
-        className="w-1.5 h-1.5 rounded-full animate-pulse"
-        style={{ backgroundColor: config.dot }}
+        className="rounded-full shrink-0"
+        style={{
+          width: size === 'sm' ? '5px' : '6px',
+          height: size === 'sm' ? '5px' : '6px',
+          backgroundColor: config.dotVar,
+        }}
       />
       {config.label}
     </motion.span>

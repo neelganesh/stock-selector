@@ -55,7 +55,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       title={`Theme: ${TITLES[theme]}`}
       data-testid="theme-toggle"
       data-theme-mode={theme}
-      className={className ?? 'inline-flex items-center justify-center w-8 h-8 rounded-full text-text-secondary hover:text-text-primary hover:bg-glass-bg-subtle transition-colors duration-200'}
+      className={className ?? 'inline-flex items-center justify-center w-8 h-8 rounded-full text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--card-bg-hover)] transition-colors duration-200'}
     >
       {icon}
     </button>

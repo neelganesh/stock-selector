@@ -38,18 +38,39 @@
   --border-strong: #D4D4D4;
 
   /* Text ladder — primary darker than #000 for soft contrast.
-     quaternary is the dimmest readable step, used for hairlines,
-     separators, and decorative micro-glyphs (SL/T1 ticks, dots). */
+     secondary and tertiary are the readable muted tiers: both meet
+     WCAG 4.5:1 on white (#6B7280 = 4.83, #767676 = 4.55). quaternary
+     is the decorative tier only (hairlines, separators, SL/T1 ticks,
+     dots) and is not used for body text. */
   --text-primary: #333333;
-  --text-secondary: #888888;
-  --text-tertiary: #9CA3AF;
-  --text-quaternary: #B8BEC9;
+  --text-secondary: #6B7280;
+  --text-tertiary: #767676;
+  --text-quaternary: #A1A1AA;
+
+  /* Elevated surfaces (flat, opaque — Kite style). Elevation is
+     expressed as a lightening/darkening step, never a shadow. */
+  --elevated-1: #FFFFFF;
+  --elevated-2: #F7F7F8;
+  --elevated-3: #F0F0F1;
+
+  /* Subtle glass aliases — used by pills/badges. Kept opaque-flat
+     per design2.md (no blur), but defined here so references resolve. */
+  --glass-bg-subtle: #F7F7F8;
+  --glass-border-subtle: #EEEEEE;
+  --glass-bg: #FFFFFF;
+  --glass-border: #E0E0E0;
+
+  /* Text on accent / on an accent-tinted surface. */
+  --accent-fg: #FFFFFF;
 
   /* Semantic data colours — the only saturated hues on the page. */
   --success-green: #4CAF50;
   --success-green-bg: rgba(76, 175, 80, 0.08);
   --hazard-red: #E53935;
   --hazard-red-bg: rgba(229, 57, 53, 0.08);
+  /* Alias — some components reference --negative for loss/error. */
+  --negative: var(--hazard-red);
+  --negative-bg: var(--hazard-red-bg);
 
   /* Brand accent — used sparingly for active states and primary
      buttons. design2.md suggests "subtle orange/red"; Zerodha's
@@ -58,6 +79,28 @@
   --accent-brand-hover: #E64A19;
   --accent-blue: #2196F3;
   --accent-blue-bg: rgba(33, 150, 243, 0.08);
+
+  /* Status semantic colors for alerts/badges */
+  --status-success: #28CD41;
+  --status-success-bg: rgba(40, 205, 65, 0.12);
+  --status-success-text: #15803d;
+  --status-warning: #FF9500;
+  --status-warning-bg: rgba(255, 149, 0, 0.12);
+  --status-warning-text: #92400e;
+  --status-error: #FF3B30;
+  --status-error-bg: rgba(255, 59, 48, 0.12);
+  --status-error-text: #991b1b;
+
+  /* Signal colors for SignalBadge dots */
+  --signal-strong-buy: #38BDF8;
+  --signal-buy: #A78BFA;
+  --signal-hold: #F0ABFC;
+  --signal-sell: #FCA5A5;
+  --signal-strong-sell: #FB7185;
+
+  /* Interactive accent for focus states and links */
+  --interactive: #007AFF;
+  --interactive-hover: #0A6FE0;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
@@ -84,18 +127,45 @@
 
   --text-primary: #E8EAED;
   --text-secondary: #9CA3AF;
-  --text-tertiary: #6B7280;
-  --text-quaternary: #4B5563;
+  --text-tertiary: #8B93A1;
+  --text-quaternary: #5C6370;
+
+  /* Elevated surfaces — flat opaque dark steps. */
+  --elevated-1: #1B1E26;
+  --elevated-2: #20242E;
+  --elevated-3: #262B37;
+
+  /* Subtle glass aliases. */
+  --glass-bg-subtle: #1B1E26;
+  --glass-border-subtle: #1F222A;
+  --glass-bg: #0F1115;
+  --glass-border: #2A2E38;
+
+  /* Text on accent / accent-tinted surface — dark accents need dark ink. */
+  --accent-fg: #0F1115;
 
   --success-green: #26C281;
   --success-green-bg: rgba(38, 194, 129, 0.14);
   --hazard-red: #EF5350;
   --hazard-red-bg: rgba(239, 83, 80, 0.14);
+  --negative: var(--hazard-red);
+  --negative-bg: var(--hazard-red-bg);
 
   --accent-brand: #FF7043;
   --accent-brand-hover: #FF5722;
   --accent-blue: #42A5F5;
   --accent-blue-bg: rgba(66, 165, 245, 0.14);
+
+  /* Status semantic colors for alerts/badges */
+  --status-success: #22C55E;
+  --status-success-bg: rgba(34, 197, 94, 0.15);
+  --status-success-text: #86EFAC;
+  --status-warning: #FB923C;
+  --status-warning-bg: rgba(251, 146, 60, 0.15);
+  --status-warning-text: #FED7AA;
+  --status-error: #F87171;
+  --status-error-bg: rgba(248, 113, 113, 0.15);
+  --status-error-text: #FECACA;
 
   color: var(--text-primary);
   background: var(--ground);
@@ -314,6 +384,8 @@ body {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  z-index: 100;
+  position: relative;
   /* The top bar is itself a container so child elements (brand tile,
      pills, text) can size relative to *its* width using `cqi`. */
   container-type: inline-size;
@@ -411,27 +483,36 @@ body {
   ---------------------------------------------------------------------------
 */
 .kite-metric {
-  padding: 20px 24px;
+  padding: 16px 20px;
   border: 1px solid var(--border-default);
   background-color: var(--ground);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .kite-metric-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
   text-transform: none;
   letter-spacing: 0;
-  margin-bottom: 8px;
 }
 
 .kite-metric-value {
-  font-size: 28px;
-  font-weight: 300;
+  font-size: 24px;
+  font-weight: 500;
   color: var(--text-primary);
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
+}
+
+.kite-metric-tick {
+  width: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background-color: var(--accent-brand);
 }
 
 /*
@@ -687,4 +768,80 @@ body.is-mobile [data-modal-panel] {
 
 .accordion-chevron[data-open="true"] {
   transform: rotate(180deg);
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Skeleton shimmer — loading placeholders for the scan/results area.
+  A moving highlight over a flat track; disabled under reduced motion.
+  ---------------------------------------------------------------------------
+*/
+@keyframes kite-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.kite-skeleton {
+  position: relative;
+  background-color: var(--elevated-2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.kite-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: kite-shimmer 1.6s ease-in-out infinite;
+}
+
+[data-theme="dark"] .kite-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.06),
+    transparent
+  );
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kite-skeleton::after {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Accessibility + numeric helpers
+  ---------------------------------------------------------------------------
+*/
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

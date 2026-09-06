@@ -1,14 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Supabase moved from legacy JWT anon/service_role keys to scoped keys:
+//   - Publishable key  (sb_publishable_*) — safe in browser bundles, replaces
+//     the old VITE_SUPABASE_ANON_KEY. We accept both names for compatibility
+//     with existing deploys, but the Publishable key is the canonical one.
+//   - Secret key       (sb_secret_*)    — server-only, never import this file
+//     from /api; that code path uses process.env.SUPABASE_SECRET_KEY directly.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabasePublishableKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+  import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials not configured. Auth and database features will be disabled.');
+if (!supabaseUrl || !supabasePublishableKey) {
+  console.warn('[Supabase] Credentials not configured. Auth and database features will be disabled.', { supabaseUrl, hasKey: !!supabasePublishableKey });
+} else {
+  console.log('[Supabase] Client initialized with URL:', supabaseUrl);
 }
 
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = supabaseUrl && supabasePublishableKey
+  ? createClient(supabaseUrl, supabasePublishableKey)
   : null;
 
 export type UserProfile = {

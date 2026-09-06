@@ -5,11 +5,46 @@ import crypto from 'crypto';
 const KITE_API_BASE = 'https://api.kite.trade';
 const KITE_LOGIN_URL = 'https://kite.zerodha.com/connect/login';
 
-// Service-role client for trusted backend operations (token verification, profile lookups)
-const supabaseAdmin = createClient(
-  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+/**
+ * Environment variable access for API routes.
+ * 
+ * IMPORTANT: In API routes (Next.js/Vercel), ONLY use non-VITE_ prefixed env vars.
+ * VITE_* vars are only available in the browser bundle via import.meta.env.
+ * For server-side code, use process.env directly.
+ */
+
+// Get required env var with helpful error message
+function getEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
+// Get optional env var, returns undefined if not set
+function getEnvOptional(key: string): string | undefined {
+  return process.env[key];
+}
+
+// Secret-key (formerly service_role) client for trusted backend operations
+// (token verification, profile lookups). The Secret key is server-only —
+// never expose it to the browser bundle.
+const supabaseUrl = getEnvOptional('SUPABASE_URL') || getEnvOptional('VITE_SUPABASE_URL');
+// Use SERVICE_ROLE_KEY if available (legacy name), fall back to SECRET_KEY (newer naming)
+const supabaseSecretKey = getEnvOptional('SUPABASE_SERVICE_ROLE_KEY') || getEnv('SUPABASE_SECRET_KEY');
+
+if (!supabaseUrl) {
+  throw new Error('SUPABASE_URL not configured - add SUPABASE_URL or VITE_SUPABASE_URL to Vercel env');
+}
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+  }
+});
 
 interface KiteCredentials {
   apiKey: string;
@@ -96,11 +131,15 @@ async function kiteRequest(
 export async function requireAuth(req: VercelRequest): Promise<AuthContext> {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
+    console.log('[requireAuth] Missing or invalid Authorization header:', authHeader);
     throw new UnauthorizedError('Missing Authorization header');
   }
 
   const token = authHeader.slice(7);
+  console.log('[requireAuth] Token present, length:', token.length, 'prefix:', token.substring(0, 20) + '...');
+  
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  console.log('[requireAuth] getUser result - user:', user?.id, 'email:', user?.email, 'error:', error);
 
   if (error || !user) {
     throw new UnauthorizedError('Invalid or expired session');
@@ -108,8 +147,8 @@ export async function requireAuth(req: VercelRequest): Promise<AuthContext> {
 
   // Build a per-request Supabase client that forwards the user's JWT.
   // Queries through this client respect RLS as the authenticated user.
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY!;
+  const supabaseUrl = getEnvOptional('SUPABASE_URL') || getEnvOptional('VITE_SUPABASE_URL') || (() => { throw new Error('SUPABASE_URL not configured'); })();
+  const supabaseAnonKey = getEnvOptional('SUPABASE_ANON_KEY') || getEnvOptional('VITE_SUPABASE_ANON_KEY') || (() => { throw new Error('SUPABASE_ANON_KEY not configured'); })();
   const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });

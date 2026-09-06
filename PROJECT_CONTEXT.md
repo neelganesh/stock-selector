@@ -5,11 +5,14 @@
 
 **Tech Stack:**
 - Frontend: Vite 8.2.2 + React 19 + TypeScript 6 + Tailwind CSS 4 + Framer Motion
-- Deployment: Vercel (static + serverless functions)
+- Deployment: Vercel (static + serverless functions, ≤12 functions cap)
 - Database: Supabase (PostgreSQL) with Row Level Security
 - Auth: Supabase Auth (user accounts) + Zerodha Connect OAuth (trading credentials)
-- Market Data: yfinanceService with Vercel rewrites + 6 fallback proxies
+- Market Data: Zerodha Kite (live) or yfinanceService (fallback) with 6 fallback proxies
 - Trading API: Zerodha Kite Connect v3
+- State: React Context (Strategy, Auth, Toast) + custom hooks
+
+**Vercel function count:** Consolidated to 8 functions (was 12) by folding the 6 Kite endpoints into one dynamic route `api/kite/[action].ts`.
 
 ---
 
@@ -60,109 +63,148 @@
 
 ### 3. Supabase Database Schema
 ```sql
--- 4 Tables with RLS Policies
+-- 5 Tables with RLS Policies
 user_profiles          -- Capital config, risk limits, Zerodha creds, paper trading
 strategy_executions    -- Trade tracking with status enum
+paper_positions        -- Simulated fills for paper trading mode
 trade_cash_flows       -- XIRR calculation (entry/exit/charge/dividend)
 capital_snapshots      -- Daily portfolio snapshots
+stock_universe         -- NSE universe (large/mid/small caps) — Phase 1 DB-driven
 ```
 - Helper functions: `get_user_capital_status()`, `updated_at` triggers
-- Indexes on user_id, status, symbol, date
+- Indexes on user_id, status, symbol, date, cap_category
+- **Status enums (canonical):**
+  - `strategy_executions.status` ∈ {pending, entry_placed, entry_filled, gtt_placed, target1_hit, target2_hit, stop_loss_hit, manually_exited, cancelled, rejected}
+  - `paper_positions.status` ∈ {pending, entry_filled, target1_hit, target2_hit, stop_loss_hit, manually_exited, cancelled, rejected} (no `entry_placed`/`gtt_placed`)
 
-### 4. Vercel Serverless Functions (Kite API Proxy)
+### 4. Vercel Serverless Functions
 ```
-/api/kite/auth.ts      - User profile
-/api/kite/token.ts     - OAuth token exchange
-/api/kite/orders.ts    - Place/modify/cancel orders
-/api/kite/gtt.ts       - GTT OCO (entry + SL + target)
-/api/kite/margins.ts   - Live margins
-/api/kite/portfolio.ts - Holdings & positions
-/api/executions/index.ts     - CRUD strategy executions
-/api/executions/[id].ts      - Single execution + status updates
-/api/executions/cashflows.ts - Cash flows for XIRR
+# Trading & market data (consolidated under [action].ts to stay under 12-function cap)
+/api/kite/[action].ts  - Dispatch: auth | token | orders | margins | portfolio | gtt
+/api/kite/_client.js   - Shared auth + kiteRequest helper
+/api/kite/token.ts     - Separate file for OAuth callback (own auth model)
+
+# Execution & capital
+/api/executions/index.ts     - GET list / POST create with cash-flow
+/api/executions/[id].ts      - PATCH status / DELETE
+/api/executions/cashflows.ts - GET cash flows for XIRR
+/api/paper-positions/index.ts  - GET list / POST simulated fill
+/api/paper-positions/[id].ts   - PATCH status / DELETE
 /api/capital/index.ts  - Capital status with live margins
+
+# Settings & admin
+/api/settings/index.ts - GET / PATCH / POST (reset_paper_portfolio)
+/api/admin/refresh-universe.ts - CRON_SECRET-gated NSE CSV upsert
+/api/reconcile-orders/index.ts - Order reconciliation stub
 ```
+
+**Auth pattern:** All user endpoints use `requireAuth(req)` from `api/kite/_client.js` (Bearer JWT from Supabase). `api/admin/refresh-universe` is the only admin endpoint — gated by `CRON_SECRET` env var, accepts `x-admin-token` header or `Authorization: Bearer <CRON_SECRET>`.
 
 ### 5. Frontend Components
 
 | Component | Purpose |
 |-----------|---------|
-| `Sidebar` | Strategy selection, cap category, scan trigger |
+| `Sidebar` | Strategy selection, cap category, scan trigger (with toast feedback) |
 | `StockCard` | Signal display with execute button |
+| `ExpandableCard` | Detail expansion with chart + fundamentals |
 | `SectorStrengthExplorer` | Equal-weighted sector NAV heatmap |
 | `CapitalBar` | Top-right budget: total/available/deployed, risk%, margins |
 | `ExecuteModal` | Risk slider (0.5-5%), position sizing, charges breakdown, GTT OCO |
-| `ExecutionTracker` | Execution list with filter tabs, action buttons (T1/T2/SL/Exit) |
-| `PnLAnalytics` | **NEW** - CAGR, XIRR, summary cards, executions table |
+| `ExecutionTracker` | Execution list with filter tabs, "Last updated" timestamp, action buttons (T1/T2/SL/Exit) |
+| `PnLAnalytics` | CAGR, XIRR, summary cards, executions table |
+| `SettingsPage` | 6 sections: Capital, Paper Trading, Zerodha API, **Stock Universe** (refresh), Appearance, Notifications |
 | `AuthProvider` / `AuthPage` | Supabase Auth (email/password) |
 | `ZerodhaLoginModal` | Kite Connect OAuth flow |
 | `PositionSizingModal` | Risk calculator (fixed) |
 | `CustomScripModal` | Import scrip.txt watchlist |
+| `GlassCard` / `AnimatedNumber` / `Pagination` / `Toast*` | UI primitives |
+| `MobileNav` / `MobileSidebarDrawer` / `MobileViewTabs` / `MobileBodyClass` | Mobile layout |
+
+**Deleted (Phase 2 cleanup):** redundant `MobileSettings`, `MobileCapital`, `MobileExecutions` wrappers — replaced by responsive desktop layouts with `useIsMobile` breakpoint (1023px).
+
+### Auth-aware fetch (`src/lib/authFetch.ts`)
+All client→API calls go through `authFetch` (raw, returns Response) or `authFetchJSON` (auto-parses + throws on non-2xx). Both wrap `fetch` and inject `Authorization: Bearer <supabase_access_token>`. Throws `Error` with status+body on 401. Use this — never call raw `fetch` to an `/api/*` endpoint.
 
 ### 6. Authentication & User Management
 - Supabase Auth (signup/login/logout)
 - User profiles with capital & risk configuration
 - Zerodha Connect OAuth with backend token exchange
-- Auto-detect `request_token` from redirect URL
-- Paper trading flag in profile
+- Auto-detect `request_token` from redirect URL; auto-saves access token to localStorage
+- "Save & Login" flow persists credentials + opens Zerodha OAuth in one click
+- Paper trading flag in profile (separate virtual capital)
 
-### 7. P&L Analytics (Latest)
+### 7. P&L Analytics
 - **XIRR**: Newton-Raphson implementation (handles irregular cash flows)
 - **CAGR**: Compound Annual Growth Rate (weighted by capital)
 - **Summary Cards**: Invested, Current Value, P&L, Charges
 - **Advanced Metrics**: XIRR & CAGR with color coding
 - **Breakdown**: Realized/Unrealized/Charges/Net
 - **Executions Table**: Per-trade XIRR, P&L%, status
+- **Data sources:** `authFetchJSON('/api/executions')` + `authFetchJSON('/api/executions/cashflows')`
+
+### 8. Stock Universe (Phase 1 — DB-driven)
+- Universe sourced from NSE CSV files (large/mid/small caps), not hardcoded
+- `stock_universe` table populated by `api/admin/refresh-universe` (CRON_SECRET-gated)
+- `src/engine/universe.ts` reads from Supabase at scan time
+- `src/services/universeService.ts` exposes `getUniverse()`, `refreshUniverse()`, `getUniverseCounts()` to the frontend
+- **Settings → Stock Universe** section: shows live counts, paste CRON_SECRET to trigger refresh
 
 ---
 
 ## Remaining Work (🔄 In Progress / ⏳ Planned)
 
-### 8. Paper Trading Mode
-- [ ] Add `paper_trading_enabled` toggle to user_profiles
-- [ ] Virtual capital tracking (separate from live)
-- [ ] Modify ExecuteModal for simulated orders
-- [ ] Paper trading indicator in CapitalBar
-- [ ] Separate P&L tracking for paper vs live
+### 8. Paper Trading Mode ✅
+- [x] `paper_trading_enabled` toggle in `user_profiles` (column added)
+- [x] Virtual capital tracking (separate from live, `paper_trading_capital`)
+- [x] ExecuteModal routes to `/api/paper-positions` when `isPaperTrading` is true
+- [x] CapitalBar shows paper capital section
+- [x] P&L rolls paper positions + live executions together (no separate P&L view yet)
 
 ### 9. Order Book Sync & GTT Monitor
-- [ ] 30s polling service: `/api/kite/orders` + `/api/kite/portfolio`
-- [ ] Auto-update execution statuses (entry_filled, target1_hit, etc.)
+- [x] 30s polling in `ExecutionTracker` (live + paper)
+- [x] "Last updated HH:MM:SS" pill in header
+- [ ] Auto-update execution statuses from `/api/kite/orders` (manual exit only so far)
 - [ ] GTT Monitor component: active GTTs with trigger prices, expiry
 - [ ] Webhook support for real-time updates (future)
 
-### 10. Settings Page
-- [ ] Total capital configuration
-- [ ] Risk per trade % (default 1%)
-- [ ] Max position % (default 10%)
-- [ ] Max sector % (default 25%)
-- [ ] Max open strategies (default 10)
-- [ ] Daily loss limit % (default 3%)
-- [ ] Paper trading toggle + virtual capital amount
-- [ ] Zerodha API key management
+### 10. Settings Page ✅
+- [x] Total capital configuration
+- [x] Risk per trade % (default 1%)
+- [x] Max position % (default 10%)
+- [x] Max sector % (default 25%)
+- [x] Max open strategies (default 10)
+- [x] Daily loss limit % (default 3%)
+- [x] Paper trading toggle + virtual capital amount
+- [x] Zerodha API key + secret management
+- [x] "Save & Login to Zerodha" one-click flow
+- [x] **Stock Universe section** (Phase 1 — paste CRON_SECRET + refresh)
+- [x] Optimistic save with rollback on error
+- [x] Theme switcher (light/dark/system) — `useTheme` hook
+- [x] Notification preferences (local UI state)
 
 ### 11. Risk Management & Bank-Grade Features
-- [ ] Pre-trade risk checks (capital, sector, position limits)
-- [ ] Daily loss limit enforcement
-- [ ] Trade journal (notes, tags, screenshots)
-- [ ] Order book sync with reconciliation
+- [x] Pre-trade risk checks in `api/capital` (capital, deployed)
+- [ ] Daily loss limit enforcement (column exists, enforcement TBD)
+- [x] Trade journal (notes, tags — columns exist, UI editor exists)
+- [ ] Order book sync with reconciliation (stub at `api/reconcile-orders`)
 - [ ] GTT expiry monitoring & alerts
 - [ ] Audit trail for all mutations
 
 ### 12. Advanced Analytics
+- [x] Per-execution XIRR/CAGR in P&L table
 - [ ] Portfolio-level XIRR/CAGR in dashboard header
-- [ ] Monthly/quarterly performance attribution
+- [x] Performance attribution component (`PerformanceAttribution.tsx` exists)
 - [ ] Sector/strategy performance breakdown
-- [ ] Drawdown analysis
+- [x] Drawdown analysis component (`DrawdownAnalysis.tsx` exists)
 - [ ] Win rate, profit factor, expectancy
 - [ ] Export to CSV/Excel
 
 ### 13. UI/UX Polish
-- [ ] Dark mode support
-- [ ] Mobile responsive improvements
+- [x] Dark mode support (`useTheme` hook + ThemeToggle; system/light/dark)
+- [x] Mobile responsive improvements (1023px breakpoint, MobileNav, MobileSidebarDrawer, MobileViewTabs)
 - [ ] Keyboard shortcuts
-- [ ] Toast notifications for async actions
-- [ ] Loading skeletons for all async components
+- [x] Toast notifications for async actions (ToastProvider + useToast; top-right desktop, bottom-center mobile)
+- [x] Loading skeletons in ExecutionTracker + others
 - [ ] Error boundaries
 
 ---

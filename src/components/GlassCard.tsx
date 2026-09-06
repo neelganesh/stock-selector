@@ -1,8 +1,6 @@
-import { motion } from 'framer-motion';
-import type { HTMLMotionProps } from 'framer-motion';
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
-interface GlassCardProps extends HTMLMotionProps<'div'> {
+interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   variant?: 'default' | 'elevated' | 'subtle' | 'interactive';
   padding?: 'none' | 'sm' | 'md' | 'lg';
@@ -19,10 +17,21 @@ const paddingStyles = {
 const variantStyles = {
   default: 'vision-glass',
   interactive: 'vision-glass vision-glass-hover',
-  elevated: 'vision-glass shadow-2xl',
+  elevated: 'vision-glass',
   subtle: 'vision-glass-subtle',
 };
 
+/**
+ * Kite-style card primitive.
+ *
+ * design2.md: flat opaque surface, single 1px hairline border, no shadow,
+ * no glass / blur / refraction. Used as the building block for stock
+ * picks, signal panels, and the strategy-rules accordion body.
+ *
+ * The `variant` prop is kept for API compatibility with the rest of
+ * the codebase but every variant now maps to the same flat material —
+ * the differentiation is just hover affordance.
+ */
 export function GlassCard({
   children,
   variant = 'default',
@@ -31,23 +40,11 @@ export function GlassCard({
   ...props
 }: GlassCardProps) {
   return (
-    <motion.div
-      className={`
-        rounded-2xl
-        ${variantStyles[variant]}
-        ${paddingStyles[padding]}
-        ${className}
-      `}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{
-        duration: 0.4,
-        ease: [0.16, 1, 0.3, 1],
-      }}
+    <div
+      className={`${variantStyles[variant]} ${paddingStyles[padding]} ${className}`}
       {...props}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

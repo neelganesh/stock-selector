@@ -87,7 +87,8 @@ export const SuperTrendRiderStrategy: StrategyDefinition = {
     const formattedVol = lastVol >= 1000000 
       ? (lastVol / 1000000).toFixed(1) + 'M' 
       : (lastVol / 1000).toFixed(0) + 'K';
-    const formattedCap = '₹' + (stock.marketCapVal / 1000).toFixed(1) + 'K Cr';
+    const capVal = typeof stock.marketCapVal === 'number' && !isNaN(stock.marketCapVal) ? stock.marketCapVal : 0;
+    const formattedCap = capVal > 0 ? '₹' + (capVal / 1000).toFixed(1) + 'K Cr' : 'N/A';
 
     return {
       id: `${stock.symbol}-supertrend`,

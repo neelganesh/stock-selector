@@ -256,29 +256,35 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
           />
 
-          {/* Modal Container — Apple system sheet */}
+          {/* Modal Container — glass surface with theme tokens */}
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 4 }}
             transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-            className="relative w-full max-w-[440px] bg-white/90 backdrop-blur-2xl border border-white/80 rounded-[20px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.18)] overflow-hidden text-slate-900 font-sans"
+            className="relative w-full max-w-[440px] rounded-[20px] overflow-hidden"
+            style={{
+              backgroundColor: 'var(--elevated-1)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
             data-modal-panel
           >
             {/* Drag handle for sheet affordance */}
             <div className="pt-2.5 flex justify-center sm:hidden">
-              <div className="w-9 h-[5px] rounded-full bg-slate-300/80" />
+              <div className="w-9 h-[5px] rounded-full" style={{ backgroundColor: 'var(--border-strong)' }} />
             </div>
 
-            {/* Header — centered, Apple style */}
+            {/* Header — centered */}
             <div className="px-7 pt-7 pb-5 text-center relative">
               <button
                 onClick={onClose}
                 aria-label="Close"
-                className="absolute top-4 right-4 w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100/80 transition-colors flex items-center justify-center"
+                className="absolute top-4 right-4 w-8 h-8 rounded-full transition-colors flex items-center justify-center"
+                style={{ color: 'var(--text-tertiary)' }}
               >
                 <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -286,14 +292,14 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
               </button>
 
               {/* Zerodha Kite mark — gradient tile */}
-              <div className="mx-auto w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-[#FF7A1A] to-[#E84A00] text-white flex items-center justify-center font-semibold text-[22px] tracking-tight shadow-[0_8px_18px_-4px_rgba(232,74,0,0.45)] mb-4">
+              <div className="mx-auto w-[52px] h-[52px] rounded-[14px] bg-gradient-to-br from-[#FF7A1A] to-[#E84A00] text-white flex items-center justify-center font-semibold text-[22px] tracking-tight mb-4">
                 K
               </div>
 
-              <h3 className="text-[20px] font-semibold tracking-[-0.01em] text-slate-900 leading-tight">
+              <h3 className="text-[20px] font-semibold tracking-[-0.01em] leading-tight" style={{ color: 'var(--text-primary)' }}>
                 Connect Zerodha Kite
               </h3>
-              <p className="mt-1.5 text-[13px] text-slate-500 leading-snug max-w-[320px] mx-auto">
+              <p className="mt-1.5 text-[13px] leading-snug max-w-[320px] mx-auto" style={{ color: 'var(--text-secondary)' }}>
                 Link your Kite Connect API for live historical data. Falls back to yfinance automatically.
               </p>
             </div>
@@ -302,30 +308,40 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
             {statusMessage && (
               <div className="mx-6 mb-2">
                 <div
-                  className={`px-3.5 py-2.5 rounded-[12px] text-[12.5px] leading-snug flex items-start gap-2.5 ${
-                    statusType === 'success'
-                      ? 'bg-[#28CD41]/10 text-emerald-900'
-                      : statusType === 'warning'
-                      ? 'bg-[#FF9500]/12 text-amber-900'
-                      : statusType === 'error'
-                      ? 'bg-[#FF3B30]/10 text-rose-900'
-                      : 'bg-slate-100/80 text-slate-700'
-                  }`}
+                  className="px-3.5 py-2.5 rounded-[12px] text-[12.5px] leading-snug flex items-start gap-2.5"
+                  style={{
+                    backgroundColor:
+                      statusType === 'success'
+                        ? 'var(--status-success-bg)'
+                        : statusType === 'warning'
+                        ? 'var(--status-warning-bg)'
+                        : statusType === 'error'
+                        ? 'var(--status-error-bg)'
+                        : 'var(--glass-bg-subtle)',
+                    color:
+                      statusType === 'success'
+                        ? 'var(--status-success-text)'
+                        : statusType === 'warning'
+                        ? 'var(--status-warning-text)'
+                        : statusType === 'error'
+                        ? 'var(--status-error-text)'
+                        : 'var(--text-secondary)',
+                  }}
                 >
                   <div className="shrink-0 mt-[1px]">
                     {isTesting ? (
-                      <svg className="w-[14px] h-[14px] animate-spin text-slate-500" viewBox="0 0 24 24" fill="none">
+                      <svg className="w-[14px] h-[14px] animate-spin" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
                     ) : statusType === 'success' ? (
-                      <svg className="w-[14px] h-[14px] text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.59 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
+                      <svg className="w-[14px] h-[14px]" style={{ color: 'var(--status-success)' }} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.59 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
                     ) : statusType === 'warning' ? (
-                      <svg className="w-[14px] h-[14px] text-amber-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                      <svg className="w-[14px] h-[14px]" style={{ color: 'var(--status-warning)' }} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                     ) : statusType === 'error' ? (
-                      <svg className="w-[14px] h-[14px] text-rose-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                      <svg className="w-[14px] h-[14px]" style={{ color: 'var(--status-error)' }} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                     ) : (
-                      <svg className="w-[14px] h-[14px] text-slate-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+                      <svg className="w-[14px] h-[14px]" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
                     )}
                   </div>
                   <span className="flex-1">{statusMessage}</span>
@@ -337,12 +353,12 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
             <div className="px-6 pt-4 pb-5 space-y-4">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between px-1">
-                  <label htmlFor="kite-api-key" className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.04em]">
+                  <label htmlFor="kite-api-key" className="text-[11px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--text-tertiary)' }}>
                     API Key
                   </label>
-                  <span className="text-[10px] text-rose-500 font-medium">Required</span>
+                  <span className="text-[10px] font-medium" style={{ color: 'var(--status-error)' }}>Required</span>
                 </div>
-                <div className="rounded-[12px] border border-slate-200/80 bg-white/70 focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20 transition-all">
+                <div className="rounded-[12px] border bg-transparent focus-within:border-[--interactive] focus-within:ring-2 focus-within:ring-[--interactive]/20 transition-all" style={{ borderColor: 'var(--border)' }}>
                   <input
                     id="kite-api-key"
                     type="text"
@@ -351,19 +367,19 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
                     placeholder="8x923jklm10429"
                     spellCheck={false}
                     autoComplete="off"
-                    className="w-full px-3.5 py-2.5 bg-transparent text-[13.5px] font-mono tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-transparent text-[13.5px] font-mono tracking-tight focus:outline-none"
+                    style={{ color: 'var(--text-primary)' }}
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between px-1">
-                  <label htmlFor="kite-api-secret" className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.04em]">
-                    API Secret
+                  <label htmlFor="kite-api-secret" className="text-[11px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--text-tertiary)' }}>
                   </label>
-                  <span className="text-[10px] text-rose-500 font-medium">Required</span>
+                  <span className="text-[10px] font-medium" style={{ color: 'var(--status-error)' }}>Required</span>
                 </div>
-                <div className="rounded-[12px] border border-slate-200/80 bg-white/70 focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20 transition-all">
+                <div className="rounded-[12px] border bg-transparent focus-within:border-[--interactive] focus-within:ring-2 focus-within:ring-[--interactive]/20 transition-all" style={{ borderColor: 'var(--border)' }}>
                   <input
                     id="kite-api-secret"
                     type="password"
@@ -372,7 +388,8 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
                     placeholder="••••••••••••••••"
                     spellCheck={false}
                     autoComplete="off"
-                    className="w-full px-3.5 py-2.5 bg-transparent text-[13.5px] font-mono tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-transparent text-[13.5px] font-mono tracking-tight focus:outline-none"
+                    style={{ color: 'var(--text-primary)' }}
                   />
                 </div>
               </div>
@@ -380,17 +397,18 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
               {requestToken && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between px-1">
-                    <label className="text-[11px] font-medium text-slate-500 uppercase tracking-[0.04em]">
+                    <label className="text-[11px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--text-tertiary)' }}>
                       Request Token
                     </label>
-                    <span className="text-[10px] text-emerald-600 font-medium">Auto-detected</span>
+                    <span className="text-[10px] font-medium" style={{ color: 'var(--status-success)' }}>Auto-detected</span>
                   </div>
-                  <div className="rounded-[12px] border border-slate-200/80 bg-slate-50/80">
+                  <div className="rounded-[12px] border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface-raised)' }}>
                     <input
                       type="text"
                       readOnly
                       value={requestToken}
-                      className="w-full px-3.5 py-2.5 bg-transparent text-[12px] font-mono tracking-tight text-slate-500 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 bg-transparent text-[12px] font-mono tracking-tight focus:outline-none"
+                      style={{ color: 'var(--text-secondary)' }}
                     />
                   </div>
                 </div>
@@ -401,10 +419,11 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
             <div className="px-6 pb-6 pt-1 space-y-3">
               <button
                 onClick={handleSaveAndLogin}
-                className="w-full h-11 rounded-[12px] text-[14px] font-semibold text-white bg-[#007AFF] hover:bg-[#0A6FE0] active:bg-[#0058B0] transition-colors flex items-center justify-center gap-1.5 shadow-[0_2px_6px_rgba(0,122,255,0.25)]"
+                className="w-full h-11 rounded-[12px] text-[14px] font-semibold flex items-center justify-center gap-1.5"
+                style={{ backgroundColor: 'var(--interactive)', color: 'white' }}
               >
                 <span>Log in with Zerodha</span>
-                <svg className="w-[14px] h-[14px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className="w-[14px] h-[14px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ stroke: 'white' }}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </button>
@@ -412,21 +431,24 @@ export function ZerodhaLoginModal({ isOpen, onClose, onCredentialsUpdated }: Zer
               <div className="flex items-center justify-center gap-4 text-[12.5px]">
                 <button
                   onClick={handleTestConnection}
-                  className="text-[#007AFF] hover:text-[#0A6FE0] font-medium transition-colors"
+                  className="font-medium transition-colors"
+                  style={{ color: 'var(--interactive)' }}
                 >
                   Test
                 </button>
-                <span className="w-px h-3 bg-slate-300" />
+                <span className="w-px h-3" style={{ backgroundColor: 'var(--border)' }} />
                 <button
                   onClick={handleSaveCredentials}
-                  className="text-[#007AFF] hover:text-[#0A6FE0] font-medium transition-colors"
+                  className="font-medium transition-colors"
+                  style={{ color: 'var(--interactive)' }}
                 >
                   Save
                 </button>
-                <span className="w-px h-3 bg-slate-300" />
+                <span className="w-px h-3" style={{ backgroundColor: 'var(--border)' }} />
                 <button
                   onClick={handleDisconnect}
-                  className="text-[#FF3B30] hover:text-[#E52E24] font-medium transition-colors"
+                  className="font-medium transition-colors"
+                  style={{ color: 'var(--status-error)' }}
                 >
                   Disconnect
                 </button>

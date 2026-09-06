@@ -1,5 +1,5 @@
 import type { StockPick, StrategyDefinition, CapCategory, ScanProgress, RawStockData } from './types';
-import { STOCK_UNIVERSE } from './universe';
+import { getUniverse } from '../services/universeService';
 import { getKiteCredentials, fetchKiteCandles } from '../services/kiteService';
 import { fetchYFinanceData, clearYFinanceCache } from '../services/yfinanceService';
 
@@ -45,12 +45,13 @@ export async function runParallelStockScan(options: ScanOptions): Promise<{
   // Clear memory cache so fresh live values are always refetched
   clearYFinanceCache();
 
-  // Filter universe by requested Cap Category or Custom Scrips
+  // Load universe from DB (Supabase) via universeService. Falls back to seed list.
   const customSet = options.customScrips && options.customScrips.length > 0
     ? new Set(options.customScrips.map((s) => s.toUpperCase()))
     : null;
 
-  const targetUniverse = STOCK_UNIVERSE.filter((stock) => {
+  const dbUniverse = await getUniverse('all');
+  const targetUniverse = dbUniverse.filter((stock) => {
     if (customSet) {
       return customSet.has(stock.symbol.toUpperCase());
     }

@@ -53,11 +53,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // 1. Fetch all open/pending executions from local DB
+    // Schema enum: pending, entry_placed, entry_filled, gtt_placed,
+    //   target1_hit, target2_hit, stop_loss_hit, manually_exited, cancelled, rejected.
+    // Note: 'pending_entry' and 'partial_exit' are legacy names that never existed in schema.
     const { data: executions, error: execError } = await userSupabase
       .from('strategy_executions')
       .select('*')
       .eq('user_id', user.id)
-      .in('status', ['pending_entry', 'entry_filled', 'gtt_placed', 'target1_hit', 'target2_hit', 'partial_exit']);
+      .in('status', ['pending', 'entry_placed', 'entry_filled', 'gtt_placed', 'target1_hit', 'target2_hit']);
 
     if (execError) throw execError;
 
@@ -144,12 +147,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Check status consistency
         const kiteStatusNormalized = ko.status === 'COMPLETE' ? 'entry_filled' :
-                                     ko.status === 'OPEN' || ko.status === 'TRIGGER PENDING' ? 'pending_entry' :
+                                     ko.status === 'OPEN' || ko.status === 'TRIGGER PENDING' ? 'pending' :
                                      ko.status === 'CANCELLED' ? 'cancelled' :
                                      ko.status === 'REJECTED' ? 'rejected' : ko.status.toLowerCase();
 
-        // Local status reflects what we expect
-        if (ko.status === 'COMPLETE' && ex.status !== 'entry_filled' && ex.status !== 'gtt_placed' && ex.status !== 'target1_hit' && ex.status !== 'target2_hit' && ex.status !== 'partial_exit' && ex.status !== 'manually_exited') {
+        // Local status reflects what we expect (using schema-canonical values)
+        if (ko.status === 'COMPLETE' && ex.status !== 'entry_filled' && ex.status !== 'gtt_placed' && ex.status !== 'target1_hit' && ex.status !== 'target2_hit' && ex.status !== 'manually_exited') {
           discrepancies.push({
             type: 'status_mismatch',
             severity: 'warning',

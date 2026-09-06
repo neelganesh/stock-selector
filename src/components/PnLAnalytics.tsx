@@ -4,6 +4,8 @@ import { AnimatedNumber } from './AnimatedNumber';
 import { calculateExecutionXIRR, calculateExecutionCAGR, formatPct, formatCurrency } from '../utils/analytics';
 import type { StrategyExecution, TradeCashFlow } from '../lib/supabase';
 import { useAuth } from './AuthProvider';
+import { authFetchJSON } from '../lib/authFetch';
+import { useToast } from './useToast';
 
 interface PnLAnalyticsProps {
   isLoggedIn: boolean;
@@ -12,6 +14,7 @@ interface PnLAnalyticsProps {
 
 export function PnLAnalytics({ isLoggedIn, onLoginClick }: PnLAnalyticsProps) {
   const { user } = useAuth();
+  const toast = useToast();
   const [executions, setExecutions] = useState<StrategyExecution[]>([]);
   const [cashFlows, setCashFlows] = useState<TradeCashFlow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,22 +37,15 @@ export function PnLAnalytics({ isLoggedIn, onLoginClick }: PnLAnalyticsProps) {
     }
 
     try {
-      const [execRes, cfRes] = await Promise.all([
-        fetch('/api/executions'),
-        fetch('/api/executions/cashflows'),
+      const [execData, cfData] = await Promise.all([
+        authFetchJSON<StrategyExecution[]>('/api/executions'),
+        authFetchJSON<TradeCashFlow[]>('/api/executions/cashflows'),
       ]);
-
-      if (execRes.ok) {
-        const execData = await execRes.json();
-        setExecutions(execData);
-      }
-
-      if (cfRes.ok) {
-        const cfData = await cfRes.json();
-        setCashFlows(cfData);
-      }
-    } catch (err) {
+      setExecutions(execData);
+      setCashFlows(cfData);
+    } catch (err: any) {
       console.error('Failed to fetch P&L data:', err);
+      toast.error(`Couldn't load P&L data: ${err?.message || 'network error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +53,7 @@ export function PnLAnalytics({ isLoggedIn, onLoginClick }: PnLAnalyticsProps) {
 
   useEffect(() => {
     fetchData();
-  }, [user]);
+  }, [user, isLoggedIn]);
 
   useEffect(() => {
     if (!executions.length && !cashFlows.length) return;
@@ -125,7 +121,7 @@ export function PnLAnalytics({ isLoggedIn, onLoginClick }: PnLAnalyticsProps) {
   if (!isLoggedIn) {
     return (
       <GlassCard className="p-6 text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 flex items-center justify-center">
+        <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center text-[color:var(--text-tertiary)]">
           <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
