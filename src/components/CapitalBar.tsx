@@ -25,6 +25,8 @@ interface CapitalData {
     maxSectorPct: number;
     maxDailyLossPct: number;
   };
+  kiteStatus?: 'connected' | 'expired' | 'token_needed' | 'not_configured';
+  kiteExpiresAt?: string | null;
 }
 
 interface CapitalBarProps {
@@ -156,6 +158,31 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
           {isLive ? 'LIVE' : 'PAPER'}
         </span>
+
+        {/* Kite Status Indicator */}
+        {capitalData?.kiteStatus && (
+          <>
+            <div className="w-px h-4 bg-slate-200" />
+            <div className="flex items-center gap-1">
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${
+                  capitalData.kiteStatus === 'connected' ? 'bg-emerald-500' :
+                  capitalData.kiteStatus === 'expired' ? 'bg-amber-500' :
+                  capitalData.kiteStatus === 'token_needed' ? 'bg-orange-500' : 'bg-slate-300'
+                }`}
+              />
+              <span className={`text-[10px] font-semibold ${
+                capitalData.kiteStatus === 'connected' ? 'text-emerald-600' :
+                capitalData.kiteStatus === 'expired' ? 'text-amber-600' :
+                capitalData.kiteStatus === 'token_needed' ? 'text-orange-600' : 'text-slate-400'
+              }`}>
+                {capitalData.kiteStatus === 'connected' ? 'Kite' :
+                 capitalData.kiteStatus === 'expired' ? 'Kite expired' :
+                 capitalData.kiteStatus === 'token_needed' ? 'Kite token' : 'yfinance'}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* Divider */}
         <div className="w-px h-4 bg-slate-200" />

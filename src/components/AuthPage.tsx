@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './AuthProvider';
 
-export function AuthPage({ onClose, onZerodhaClick }: { onClose: () => void; onZerodhaClick?: () => void }) {
+export function AuthPage({ onClose }: { onClose: () => void }) {
   const { signIn, signUp, loading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -166,24 +166,6 @@ export function AuthPage({ onClose, onZerodhaClick }: { onClose: () => void; onZ
               )}
             </button>
           </form>
-
-          {/* Zerodha Connect Option */}
-          {onZerodhaClick && (
-            <button
-              onClick={() => { onClose(); onZerodhaClick(); }}
-              className="w-full px-5 py-3 rounded-xl border transition-all flex items-center justify-center gap-2 text-xs font-semibold"
-              style={{ 
-                backgroundColor: 'var(--elevated-2)',
-                borderColor: 'var(--border-default)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-              </svg>
-              Connect Zerodha
-            </button>
-          )}
 
           <div className="text-center text-xs" style={{ color: 'var(--text-tertiary)' }}>
             <span>{isLogin ? "Don't have an account?" : 'Already have an account?'}</span>

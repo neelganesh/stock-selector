@@ -48,7 +48,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const [draft, setDraft] = useState<UserSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('capital');
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -144,13 +144,10 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   };
 
   /**
-   * Auto-save credentials + redirect to Zerodha OAuth in one step.
-   * Why: previously the user had to click "Save Credentials" and then
-   * "Login to Zerodha" separately. If they forgot Save, the Login button
-   * would redirect but the backend would have no api_secret to exchange
-   * the request_token later, leading to a confusing 400.
+   * Generate token - redirects to Zerodha OAuth, then exchanges
+   * the request_token for an access_token internally.
    */
-  const handleSaveAndLogin = async () => {
+  const handleGenerateToken = async () => {
     if (!draft?.zerodha_api_key?.trim() || !draft?.zerodha_api_secret?.trim()) {
       setSaveMessage({ type: 'error', text: 'Enter both API Key and API Secret' });
       toast.error('Enter both API Key and API Secret');
@@ -162,13 +159,12 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       toast.error('Please sign in first');
       return;
     }
-    setIsLoggingIn(true);
+    setIsGeneratingToken(true);
     setSaveMessage(null);
     try {
       const token = await getAccessToken();
       if (!token) throw new Error('Not signed in');
-      // Persist the credentials to the backend first so the OAuth callback
-      // can use them to exchange the request_token for an access_token.
+      // Persist credentials first, then redirect to OAuth
       const res = await fetch('/api/kite/credentials', {
         method: 'PUT',
         headers: {
@@ -184,15 +180,15 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to save credentials');
       }
-      toast.success('Credentials saved — redirecting to Zerodha…');
-      // Now redirect to Zerodha's OAuth page.
+      toast.success('Redirecting to Zerodha to authorize...');
+      // Redirect to Zerodha OAuth - callback will exchange token
       const apiKey = draft.zerodha_api_key.trim();
       window.location.href = `https://kite.zerodha.com/connect/login?v=3&api_key=${encodeURIComponent(apiKey)}`;
     } catch (err: any) {
-      setIsLoggingIn(false);
-      const message = err?.message || 'Failed to start Zerodha login';
+      setIsGeneratingToken(false);
+      const message = err?.message || 'Failed to start token generation';
       setSaveMessage({ type: 'error', text: message });
-      toast.error(`Zerodha login failed: ${message}`);
+      toast.error(`Token generation failed: ${message}`);
     }
   };
 
@@ -353,8 +349,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
               updateDraft={updateDraft}
               handleSave={handleSave}
               isSaving={isSaving}
-              handleSaveAndLogin={handleSaveAndLogin}
-              isLoggingIn={isLoggingIn}
+              handleGenerateToken={handleGenerateToken}
+              isGeneratingToken={isGeneratingToken}
             />
           )}
           {activeSection === 'universe' && (
@@ -570,8 +566,8 @@ function KiteSettings({
   updateDraft,
   handleSave,
   isSaving,
-  handleSaveAndLogin,
-  isLoggingIn,
+  handleGenerateToken,
+  isGeneratingToken,
 }: {
   apiKey?: string | null;
   hasApiSecret?: boolean;
@@ -580,18 +576,14 @@ function KiteSettings({
   updateDraft: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
   handleSave: () => void;
   isSaving: boolean;
-  handleSaveAndLogin: () => void;
-  isLoggingIn: boolean;
+  handleGenerateToken: () => void;
+  isGeneratingToken: boolean;
 }) {
-  const isConnected = !!apiKey;
+  const isConfigured = !!apiKey && !!hasApiSecret;
   const isCredentialsLocked = !!hasApiSecret;
   const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
   const isExpired = expiresAtDate ? expiresAtDate < new Date() : true;
-
-  const handleLoginRedirect = () => {
-    if (!draft?.zerodha_api_key) return;
-    window.location.href = `https://kite.zerodha.com/connect/login?v=3&api_key=${encodeURIComponent(draft.zerodha_api_key)}`;
-  };
+  const needsToken = !expiresAt || isExpired;
 
   return (
     <GlassCard variant="default" padding="lg" className="space-y-4">
@@ -602,35 +594,41 @@ function KiteSettings({
 
       <div
         className={`flex items-center justify-between p-3 rounded-xl ${
-          isConnected && !isExpired
+          isConfigured && !needsToken
             ? 'bg-emerald-50 border border-emerald-200'
+            : isConfigured && needsToken
+            ? 'bg-amber-50 border border-amber-200'
             : 'bg-rose-50 border border-rose-200'
         }`}
       >
         <div className="flex items-center gap-3">
           <div
             className={`w-3 h-3 rounded-full ${
-              isConnected && !isExpired ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+              isConfigured && !needsToken ? 'bg-emerald-500 animate-pulse' : 
+              isConfigured && needsToken ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'
             }`}
           />
           <div>
             <div className="text-sm font-bold text-slate-900">
-              {isConnected && !isExpired ? 'Connected' : isConnected ? 'Token Expired' : 'Not Connected'}
+              {isConfigured && !needsToken ? 'Connected' : 
+               isConfigured && needsToken ? 'Token Expired' : 'Not Configured'}
             </div>
             {expiresAtDate && (
               <div className="text-xs text-slate-500">
-                {isExpired ? 'Expired' : 'Expires'}: {expiresAtDate.toLocaleString('en-IN')}
+                {needsToken ? 'Expired' : 'Expires'}: {expiresAtDate.toLocaleString('en-IN')}
               </div>
             )}
           </div>
         </div>
-        <button
-          onClick={handleLoginRedirect}
-          disabled={!draft?.zerodha_api_key}
-          className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed"
-        >
-          {isConnected ? 'Reconnect' : 'Login to Zerodha'}
-        </button>
+        {isConfigured && needsToken && (
+          <button
+            onClick={handleGenerateToken}
+            disabled={isGeneratingToken}
+            className="px-3 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+          >
+            {isGeneratingToken ? 'Generating...' : 'Generate Token'}
+          </button>
+        )}
       </div>
 
       <div>
@@ -661,22 +659,13 @@ function KiteSettings({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <button
-          onClick={handleSave}
-          disabled={isSaving || isCredentialsLocked}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors"
-        >
-          {isSaving ? 'Saving…' : isCredentialsLocked ? 'Credentials Locked' : 'Save Credentials'}
-        </button>
-        <button
-          onClick={handleSaveAndLogin}
-          disabled={isLoggingIn || !draft?.zerodha_api_key?.trim() || !draft?.zerodha_api_secret?.trim()}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-        >
-          {isLoggingIn ? 'Redirecting…' : 'Save & Login to Zerodha'}
-        </button>
-      </div>
+      <button
+        onClick={handleSave}
+        disabled={isSaving || isCredentialsLocked}
+        className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors w-full sm:w-auto"
+      >
+        {isSaving ? 'Saving…' : isCredentialsLocked ? 'Credentials Saved' : 'Save Credentials'}
+      </button>
 
       {isCredentialsLocked && (
         <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">

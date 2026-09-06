@@ -1051,7 +1051,7 @@ function DashboardContent() {
 
         {/* Auth Modal */}
         {isAuthModalOpen && (
-          <AuthPage onClose={() => setIsAuthModalOpen(false)} onZerodhaClick={() => setIsZerodhaModalOpen(true)} />
+          <AuthPage onClose={() => setIsAuthModalOpen(false)} />
         )}
     </div>
   );

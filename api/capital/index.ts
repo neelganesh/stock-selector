@@ -60,6 +60,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     portfolioDeployed
   );
 
+  // Add kite connection status
+  const credentials = await getUserKiteCredentials(user.id);
+  const kiteStatus = credentials?.zerodha_access_token && credentials?.zerodha_access_token_expires_at
+    ? (new Date(credentials.zerodha_access_token_expires_at) > new Date() ? 'connected' : 'expired')
+    : credentials?.zerodha_api_key ? 'token_needed' : 'not_configured';
+
+  capitalData.kiteStatus = kiteStatus;
+  capitalData.kiteExpiresAt = credentials?.zerodha_access_token_expires_at || null;
+
   console.log('[capital API] Returning capital data for user:', user.id);
   return res.status(200).json(capitalData);
 }
