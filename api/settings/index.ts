@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // /api/kite routes which read them via service role.
       // Use maybeSingle() — returns null instead of throwing when no rows match.
       // This avoids uncaught exceptions that crash the API with 500.
+      // Note: zerodha_api_secret is intentionally excluded — it's server-only.
       let { data, error } = await userSupabase
         .from('user_profiles')
         .select(`
@@ -28,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           total_capital, risk_per_trade_pct, max_position_pct,
           max_sector_pct, max_open_strategies, daily_loss_limit_pct,
           paper_trading_enabled, paper_trading_capital,
-          zerodha_api_key, zerodha_api_secret, zerodha_user_id, zerodha_access_token_expires_at,
+          zerodha_api_key, zerodha_user_id, zerodha_access_token_expires_at,
           created_at, updated_at
         `)
         .eq('user_id', user.id)
