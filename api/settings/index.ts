@@ -73,6 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const updates = req.body;
 
       // Whitelist of allowed fields (prevents arbitrary overwrites)
+      // Note: zerodha_api_secret intentionally excluded - it's server-only
       const allowedFields = [
         'total_capital',
         'risk_per_trade_pct',
@@ -84,7 +85,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'paper_trading_capital',
         'full_name',
         'zerodha_api_key',
-        'zerodha_api_secret',
       ];
 
       // Field-level numeric validation. Reject clearly bad inputs to prevent
@@ -126,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .update(sanitized)
         .eq('user_id', user.id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       return res.status(200).json(data);

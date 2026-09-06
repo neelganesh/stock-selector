@@ -60,25 +60,43 @@ export interface AuthContext {
 }
 
 async function getUserKiteCredentials(userId: string): Promise<KiteCredentials | null> {
-  const { data: profile } = await supabaseAdmin
-    .from('user_profiles')
-    .select('zerodha_api_key, zerodha_api_secret, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
-    .eq('user_id', userId)
-    .single();
+  try {
+    // Note: zerodha_api_secret column may not exist in older production DBs.
+    // Wrap in try-catch to handle missing columns gracefully.
+    const { data: profile } = await supabaseAdmin
+      .from('user_profiles')
+      .select('zerodha_api_key, zerodha_access_token, zerodha_access_token_expires_at, zerodha_user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-  if (!profile?.zerodha_api_key || !profile?.zerodha_api_secret) return null;
+    // If profile doesn't exist or no API key, return null (no Zerodha credentials)
+    if (!profile?.zerodha_api_key) return null;
 
-  // Check if access token is expired (expires at 6 AM next day)
-  const isExpired = profile.zerodha_access_token_expires_at
-    ? new Date(profile.zerodha_access_token_expires_at) < new Date()
-    : true;
+    // Note: zerodha_api_secret is required for token exchange but may not be in DB.
+    // If the column doesn't exist, we can't use Zerodha - return null.
+    const hasApiSecret = 'zerodha_api_secret' in (profile as any);
+    if (!hasApiSecret) return null;
 
-  return {
-    apiKey: profile.zerodha_api_key,
-    apiSecret: profile.zerodha_api_secret,
-    accessToken: isExpired ? undefined : profile.zerodha_access_token,
-    userId: profile.zerodha_user_id || undefined,
-  };
+    const apiSecret = (profile as any).zerodha_api_secret;
+    if (!apiSecret) return null;
+
+    // Check if access token is expired (expires at 6 AM next day)
+    const isExpired = profile.zerodha_access_token_expires_at
+      ? new Date(profile.zerodha_access_token_expires_at) < new Date()
+      : true;
+
+    return {
+      apiKey: profile.zerodha_api_key,
+      apiSecret,
+      accessToken: isExpired ? undefined : profile.zerodha_access_token,
+      userId: profile.zerodha_user_id || undefined,
+    };
+  } catch (err) {
+    // If query fails (e.g., missing columns), log and return null
+    console.error('[getUserKiteCredentials] Error fetching credentials:', err);
+    return null;
+  }
+}
 }
 
 function generateChecksum(apiKey: string, requestToken: string, apiSecret: string): string {
