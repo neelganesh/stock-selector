@@ -41,7 +41,7 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
   const [error, setError] = useState<string | null>(null);
 
 
-  const fetchCapitalData = useCallback(async () => {
+  const fetchCapitalData = useCallback(async (retryCount = 0) => {
     if (!isLoggedIn || !supabase) {
       setCapitalData(null);
       setIsLoading(false);
@@ -64,6 +64,13 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
       const data = await authFetchJSON<CapitalData>('/api/capital');
       setCapitalData(data);
     } catch (err) {
+      // Retry up to 2 times on auth failures (transient token issues)
+      if (retryCount < 2 && (err instanceof APIError && (err.code === 'AUTH_FAILED' || err.status === 401))) {
+        console.log(`[CapitalBar] Auth failed, retry ${retryCount + 1}/2...`);
+        await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
+        return fetchCapitalData(retryCount + 1);
+      }
+      
       if (err instanceof APIError && (err.code === 'AUTH_FAILED' || err.status === 401)) {
         setError('Session expired - please refresh');
       } else {
@@ -133,7 +140,7 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
   if (!capitalData) {
     return (
       <motion.button
-        onClick={fetchCapitalData}
+        onClick={() => fetchCapitalData()}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-slate-100"
@@ -348,7 +355,7 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
 
                 {/* Refresh */}
                 <button
-                  onClick={fetchCapitalData}
+                  onClick={() => fetchCapitalData()}
                   disabled={isLoading}
                   className="w-full py-2 rounded-lg text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
                 >

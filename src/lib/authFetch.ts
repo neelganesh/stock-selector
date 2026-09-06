@@ -34,7 +34,8 @@ async function getAccessToken(): Promise<string | null> {
  */
 export async function authFetch(
   path: string,
-  options: AuthFetchOptions = {}
+  options: AuthFetchOptions = {},
+  retryCount = 0
 ): Promise<Response> {
   const token = await getAccessToken();
   console.log('[authFetch]', path, 'token:', token ? token.substring(0, 20) + '...' : 'NONE');
@@ -53,6 +54,14 @@ export async function authFetch(
     ...options,
     headers,
   });
+
+  // Retry once on 401 if token was provided (session might have been stale)
+  if (!response.ok && response.status === 401 && retryCount < 1 && token) {
+    console.log('[authFetch] 401 received, retrying with refreshed session...');
+    // Refresh the session
+    await supabase?.auth.refreshSession();
+    return authFetch(path, options, retryCount + 1);
+  }
 
   return response;
 }
