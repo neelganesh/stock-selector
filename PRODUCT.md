@@ -36,7 +36,7 @@ Multi-strategy screening in one clean interface. Each strategy is a pluggable mo
 - Show key metrics per pick (entry, stop loss, targets, rationale)
 - Responsive across mobile, tablet, and desktop
 - Smooth, fluid animations that feel native and premium
-- Rate-limited data fetching with fallback to yfinance, primary target Zerodha Kite API
+- Rate-limited data fetching with yfinance for historical data
 
 **Constraints:**
 - No live trading execution in v1 — screening only
@@ -60,7 +60,7 @@ Scalability: the layout and component architecture must support any screen size 
 ## Evidence on Hand
 
 - Placeholder strategy name: "Zerodha Swing Strategy" — implementation will be provided by user in next step
-- Data sources: Zerodha Kite API (primary target), yfinance (fallback)
+- Data sources: yfinance for historical price data, Kite Publisher mode for order placement
 - No real stock picks, logos, testimonials, or performance data yet
 
 ## Product Principles

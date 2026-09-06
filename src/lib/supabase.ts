@@ -21,25 +21,22 @@ export const supabase = supabaseUrl && supabasePublishableKey
   ? createClient(supabaseUrl, supabasePublishableKey)
   : null;
 
+/**
+ * The client-side UserProfile type. Mirrors the user_profiles table.
+ *
+ * NOTE: zerodha_* columns are gone — we use Kite Publisher mode with a
+ * single kite_api_key field stored encrypted server-side.
+ */
 export type UserProfile = {
   id: string;
   user_id: string;
   email: string;
   full_name: string | null;
   avatar_url: string | null;
-  total_capital: number;
-  risk_per_trade_pct: number;
-  max_position_pct: number;
-  max_sector_pct: number;
-  max_open_strategies: number;
-  daily_loss_limit_pct: number;
   paper_trading_enabled: boolean;
   paper_trading_capital: number;
-  zerodha_api_key: string | null;
-  zerodha_api_secret: string | null;
-  zerodha_access_token: string | null;
-  zerodha_access_token_expires_at: string | null;
-  zerodha_user_id: string | null;
+  /** AES-256-GCM ciphertext (v1:iv:tag:ct), never the plaintext. */
+  kite_api_key: string | null;
   created_at: string;
   updated_at: string;
 };

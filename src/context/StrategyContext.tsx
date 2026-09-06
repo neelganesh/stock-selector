@@ -3,9 +3,8 @@ import type { ReactNode } from 'react';
 import type { CapCategory, StockPick, StrategyDefinition, ScanProgress } from '../engine/types';
 import { ALL_STRATEGIES, getStrategyById } from '../engine/strategies';
 import { runParallelStockScan } from '../engine/scannerEngine';
-import { checkAndExtractRequestToken, getKiteCredentials } from '../services/kiteService';
 
-export type DataSourceType = 'Zerodha Kite API (Live)' | 'yfinance (Fallback)';
+export type DataSourceType = 'yfinance';
 
 export type SortOption =
   | 'rank'
@@ -47,9 +46,6 @@ interface StrategyContextType {
 
   activeDataSource: DataSourceType;
   setActiveDataSource: (source: DataSourceType) => void;
-  
-  isZerodhaModalOpen: boolean;
-  setIsZerodhaModalOpen: (open: boolean) => void;
 
   customScripList: string[];
   setCustomScripList: (scrips: string[]) => void;
@@ -81,25 +77,13 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
   const [sortBy, setSortBy] = useState<SortOption>('rank');
   const [resultCapFilter, setResultCapFilter] = useState<ResultCapFilter>('all');
 
-  const [activeDataSource, setActiveDataSource] = useState<DataSourceType>('yfinance (Fallback)');
-  const [isZerodhaModalOpen, setIsZerodhaModalOpen] = useState<boolean>(false);
+  const [activeDataSource, setActiveDataSource] = useState<DataSourceType>('yfinance');
   const [customScripList, setCustomScripList] = useState<string[]>([]);
   const [isPaperOnly, setIsPaperOnlyState] = useState<boolean>(true);
 
   const setIsPaperOnly = (val: boolean) => setIsPaperOnlyState(val);
 
   const activeStrategy = getStrategyById(activeStrategyId);
-
-  // Auto-detect Zerodha OAuth redirect token on mount
-  useEffect(() => {
-    checkAndExtractRequestToken();
-    const creds = getKiteCredentials();
-    if (creds.apiKey && (creds.accessToken || creds.requestToken) && creds.hasHistoricalAccess) {
-      setActiveDataSource('Zerodha Kite API (Live)');
-    } else {
-      setActiveDataSource('yfinance (Fallback)');
-    }
-  }, []);
 
   const runScan = useCallback(
     async (strategyIdToUse?: string, capToUse?: CapCategory) => {
@@ -167,8 +151,6 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
         setResultCapFilter,
         activeDataSource,
         setActiveDataSource,
-        isZerodhaModalOpen,
-        setIsZerodhaModalOpen,
         customScripList,
         setCustomScripList,
         isPaperOnly,

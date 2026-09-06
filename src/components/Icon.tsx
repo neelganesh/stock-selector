@@ -15,7 +15,8 @@ export type IconName =
   | 'monitor' | 'sun' | 'moon' | 'refresh' | 'search' | 'arrow-right'
   | 'arrow-up' | 'arrow-down' | 'check' | 'x' | 'chevron-down'
   | 'alert' | 'target' | 'stop' | 'logout' | 'clock' | 'trash'
-  | 'import' | 'info' | 'filter' | 'layers';
+  | 'import' | 'info' | 'filter' | 'layers' | 'link' | 'user'
+  | 'eye' | 'eye-off' | 'lock';
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -72,6 +73,13 @@ const paths: Record<IconName, ReactNode> = {
       <path d="M9 8V2" />
       <path d="M15 8V2" />
       <path d="M18 8v5a4 4 0 01-4 4h-4a4 4 0 01-4-4V8Z" />
+    </>
+  ),
+
+  link: (
+    <>
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
     </>
   ),
 
@@ -194,6 +202,34 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M12 2l10 5-10 5L2 7l10-5z" />
       <path d="M2 12l10 5 10-5M2 17l10 5 10-5" />
+    </>
+  ),
+
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+    </>
+  ),
+
+  eye: (
+    <>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+
+  'eye-off': (
+    <>
+      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </>
+  ),
+
+  lock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0110 0v4" />
     </>
   ),
 };

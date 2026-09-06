@@ -7,6 +7,24 @@ import { InfoTooltip } from './InfoTooltip';
 import { Icon } from './Icon';
 import type { StockPick } from '../engine/types';
 
+const LOGO_DEV_KEY = 'pk_SGz4DyGzSNKkmEabGKmhjg';
+
+function CompanyLogo({ ticker, size = 28 }: { ticker: string; size?: number }) {
+  const tickerWithSuffix = ticker.includes('.') ? ticker : `${ticker}.NS`;
+  return (
+    <img
+      src={`https://img.logo.dev/ticker/${tickerWithSuffix}?token=${LOGO_DEV_KEY}&size=${size}&format=webp&retina=true`}
+      alt={`${ticker} logo`}
+      width={size}
+      height={size}
+      className="rounded shrink-0 object-contain"
+      onError={(e) => {
+        (e.target as HTMLImageElement).style.display = 'none';
+      }}
+    />
+  );
+}
+
 interface StockCardProps {
   isPaperOnly?: boolean;
   stock: StockPick;
@@ -104,20 +122,14 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
         onClick={() => setIsExpanded((v) => !v)}
         className="group relative cursor-pointer transition-colors duration-200 h-full"
       >
-        {/* HEADER — symbol monogram (text, no chip) + name + price + chevron */}
+        {/* HEADER — company logo + name + price + chevron */}
 
         <div
           className="kite-card-header"
           style={{ containerType: 'inline-size', containerName: 'stock-card' }}
         >
-          {/* Symbol monogram */}
-          <span
-            className="kite-card-icon font-mono font-extrabold tracking-tight text-[color:var(--text-primary)] tabular-nums shrink-0"
-            style={{ fontSize: 'clamp(12px, 3cqi, 18px)' }}
-            aria-hidden="true"
-          >
-            {stock.symbol.slice(0, 2)}
-          </span>
+          {/* Company logo */}
+          <CompanyLogo ticker={stock.symbol} size={32} />
 
           {/* Left: symbol only (signal moved to sub-row for more space) */}
           <div className="min-w-0 flex-1 flex items-center">

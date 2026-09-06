@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../_auth.js';
 
 /**
  * Capital API - Returns user capital data including deployed/available amounts.
@@ -7,8 +7,10 @@ import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError, ge
  * Flow:
  * 1. Authenticate user via Bearer token
  * 2. Fetch user profile (create default if missing)
- * 3. Fetch open positions from DB and Kite
+ * 3. Fetch open positions from DB
  * 4. Calculate and return capital metrics
+ * 
+ * Note: Live Kite data is fetched client-side via Publisher mode.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow GET requests
@@ -48,8 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const openExecutions = await getOpenExecutions(supabase, user.id);
   const paperPositions = await getOpenPaperPositions(supabase, user.id);
 
-  // Fetch live data from Zerodha (optional - don't fail if unavailable)
-  const { availableMargin, portfolioDeployed } = await getLiveCapitalData(user.id);
+  // Note: Live Kite margin data is fetched client-side via Publisher mode
+  // Server-side only handles database positions
+  const availableMargin = 0;
+  const portfolioDeployed = 0;
 
   // Calculate and return capital metrics
   const capitalData = calculateCapitalMetrics(
@@ -60,14 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     portfolioDeployed
   );
 
-  // Add kite connection status
-  const credentials = await getUserKiteCredentials(user.id);
-  const kiteStatus = credentials?.zerodha_access_token && credentials?.zerodha_access_token_expires_at
-    ? (new Date(credentials.zerodha_access_token_expires_at) > new Date() ? 'connected' : 'expired')
-    : credentials?.zerodha_api_key ? 'token_needed' : 'not_configured';
-
-  capitalData.kiteStatus = kiteStatus;
-  capitalData.kiteExpiresAt = credentials?.zerodha_access_token_expires_at || null;
+  // Kite connection status - Publisher mode doesn't need server-side tokens
+  // The frontend will fetch this from the browser via Kite Publisher JS
+  capitalData.kiteStatus = profile.kite_api_key ? 'ready' : 'not_configured';
+  capitalData.kiteExpiresAt = null;
 
   console.log('[capital API] Returning capital data for user:', user.id);
   return res.status(200).json(capitalData);
@@ -104,7 +104,7 @@ async function getOrCreateUserProfile(supabase: any, user: { id: string; email?:
     paper_trading_capital: 100000,
   };
 
-  const { data: newProfile, error: createError } = await supabaseAdmin
+  const { data: newProfile, error: createError } = await supabase
     .from('user_profiles')
     .insert(defaultProfile)
     .select()
@@ -132,7 +132,7 @@ async function getOpenExecutions(supabase: any, userId: string): Promise<any[]> 
 }
 
 /**
- * Get open paper positions for capital calculation.
+ * Get open Paper positions for capital calculation.
  */
 async function getOpenPaperPositions(supabase: any, userId: string): Promise<any[]> {
   const { data: positions } = await supabase
@@ -141,45 +141,6 @@ async function getOpenPaperPositions(supabase: any, userId: string): Promise<any
     .eq('user_id', userId)
     .in('status', ['pending', 'entry_filled', 'target1_hit', 'target2_hit']);
   return positions || [];
-}
-
-/**
- * Fetch live capital data from Zerodha (optional - won't fail if unavailable).
- */
-async function getLiveCapitalData(userId: string): Promise<{ availableMargin: number; portfolioDeployed: number }> {
-  let availableMargin = 0;
-  let portfolioDeployed = 0;
-
-  try {
-    const credentials = await getUserKiteCredentials(userId);
-    if (!credentials) {
-      console.log('[capital API] No Kite credentials for user:', userId);
-      return { availableMargin, portfolioDeployed };
-    }
-
-    // Fetch margins from Kite
-    try {
-      const margins = await kiteRequest(credentials, 'GET', '/user/margins');
-      availableMargin = margins?.equity?.net || 0;
-    } catch (marginError) {
-      console.warn('[capital API] Failed to fetch margins:', marginError);
-    }
-
-    // Fetch portfolio positions from Kite
-    try {
-      const portfolio = await kiteRequest(credentials, 'GET', '/portfolio/positions');
-      const dayPositions = portfolio?.day || [];
-      portfolioDeployed = dayPositions
-        .filter((p: any) => p.quantity !== 0)
-        .reduce((sum: number, p: any) => sum + Math.abs(p.quantity * p.average_price), 0);
-    } catch (portfolioError) {
-      console.warn('[capital API] Failed to fetch portfolio:', portfolioError);
-    }
-  } catch (err) {
-    console.warn('[capital API] Error fetching live data:', err);
-  }
-
-  return { availableMargin, portfolioDeployed };
 }
 
 /**

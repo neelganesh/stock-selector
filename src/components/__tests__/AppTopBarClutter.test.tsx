@@ -70,11 +70,18 @@ vi.mock('../../context/StrategyContext', () => ({
   }),
 }));
 
+
 globalThis.fetch = vi.fn().mockResolvedValue({
   ok: false,
   status: 404,
   json: async () => ({}),
 } as any);
+
+vi.mock('../../components/ZerodhaStatusButton', () => ({
+  ZerodhaStatusButton: ({ onNavigateToProfile }: { onNavigateToProfile: () => void }) => {
+    return null;
+  },
+}));
 
 import App from '../../App';
 

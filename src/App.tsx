@@ -6,105 +6,40 @@ import { MobileSidebarDrawer } from './components/MobileSidebarDrawer';
 import { MobileBodyClass } from './components/MobileBodyClass';
 import { StockCard } from './components/StockCard';
 import { ExpandableCard } from './components/ExpandableCard';
-import { ZerodhaLoginModal } from './components/ZerodhaLoginModal';
 import { SectorStrengthExplorer } from './components/SectorStrengthExplorer';
 import { CapitalBar } from './components/CapitalBar';
 import { ExecuteModal } from './components/ExecuteModal';
-import { ExecutionTracker } from './components/ExecutionTracker';
 import { ToastProvider } from './components/ToastProvider';
 import { useToast } from './components/useToast';
 import { MobileNav, type MobileNavTab } from './components/MobileNav';
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { AuthPage } from './components/AuthPage';
-import { PnLAnalytics } from './components/PnLAnalytics';
 import { SettingsPage } from './components/SettingsPage';
 import { Pagination } from './components/Pagination';
 import { InfoTooltip } from './components/InfoTooltip';
 import { Icon } from './components/Icon';
 import { AnimatedNumber } from './components/AnimatedNumber';
+import { GlassCard } from './components/GlassCard';
+import { ZerodhaStatusButton } from './components/ZerodhaStatusButton';
 
 import { useTheme } from './hooks/useTheme';
 import { authFetch } from './lib/authFetch';
+import { placeOrder } from './services/kitePublisher';
 import type { StockPick } from './engine/types';
 
-const RESULTS_PER_PAGE = 12;
-
-/**
- * On app mount, detect a Zerodha OAuth callback in the URL
- * (?request_token=...) and silently exchange it for an access_token
- * via the backend. We do this at the top level (not just inside the
- * modal) so the user lands back on the dashboard and sees a toast
- * saying "Zerodha connected" — no re-entering credentials, no looping.
- *
- * If anything goes wrong (no API key/secret in DB, Kite API error),
- * we open the modal so the user can fix the issue.
- */
-function useZerodhaOAuthAutoExchange(
-  getAccessToken: () => Promise<string | null>,
-  onSuccess: () => void,
-  onNeedsCredentials: () => void,
-  onError: (message: string) => void
-) {
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const requestToken = params.get('request_token');
-    const status = params.get('status');
-    if (!requestToken || status === 'error') return;
-
-    // Clean the URL immediately so refreshes don't re-trigger
-    const cleanUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-
-    // Exchange silently
-    (async () => {
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          onNeedsCredentials();
-          return;
-        }
-        const res = await fetch('/api/kite/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ requestToken }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          // If credentials are missing, prompt the user via the modal
-          if (res.status === 400 && /not configured|api key/i.test(data.error || '')) {
-            onNeedsCredentials();
-            return;
-          }
-          throw new Error(data.error || `Token exchange failed (${res.status})`);
-        }
-        // Cache the access token in localStorage so the rest of the app
-        // can use it without a round trip
-        try {
-          const STORAGE_KEY = 'zerodha_kite_credentials';
-          const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-          localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-              ...existing,
-              accessToken: data.access_token,
-              requestToken,
-              loginTime: new Date().toISOString(),
-            })
-          );
-        } catch {
-          /* localStorage is optional */
-        }
-        onSuccess();
-      } catch (err: any) {
-        onError(err.message || 'Failed to connect Zerodha');
-      }
-    })();
-  }, [getAccessToken, onSuccess, onNeedsCredentials, onError]);
+function ComingSoonPlaceholder({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <GlassCard variant="default" padding="lg" className="text-center mt-6">
+      <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
+        <Icon name="clock" size={32} strokeWidth={1.5} style={{ color: 'var(--text-tertiary)' }} />
+      </div>
+      <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
+      <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{subtitle}</p>
+    </GlassCard>
+  );
 }
+
+const RESULTS_PER_PAGE = 12;
 
 function DashboardContent() {
   const {
@@ -119,36 +54,14 @@ function DashboardContent() {
     setSortBy,
     resultCapFilter,
     setResultCapFilter,
-    activeDataSource,
-    isZerodhaModalOpen,
-    setIsZerodhaModalOpen,
     progress,
-    runScan,
     isPaperOnly,
     setIsPaperOnly,
   } = useStrategy();
 
-  const { user, profile, getAccessToken, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
-
-  // Silently exchange request_token on mount if the URL has one
-  // (i.e. we just got redirected back from kite.zerodha.com OAuth).
-  // No UI shown to the user — just a toast on success/failure.
-  useZerodhaOAuthAutoExchange(
-    getAccessToken,
-    () => {
-      toast.success('Zerodha Connected — Live Kite API is now active.');
-      runScan();
-    },
-    () => {
-      setIsZerodhaModalOpen(true);
-      toast.warning('Enter your Zerodha API key and secret to finish connecting.');
-    },
-    (msg) => {
-      toast.error(`Zerodha connection failed: ${msg}`);
-    }
-  );
 
   const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics' | 'settings'>('signals');
   const [currentPage, setCurrentPage] = useState(1);
@@ -221,98 +134,34 @@ function DashboardContent() {
 
     if (isPaperOnly && !params.isPaperTrading) { throw new Error("Paper Mode — Orders Disabled"); }
 
-    // Live trading - real order flow.
-    // 1. Create strategy_executions row (status='pending') via /api/executions
-    // 2. Place entry order on Kite via /api/kite/orders (action=orders)
-    // 3. Place OCO GTT (target + stop-loss) via /api/kite/gtt (action=gtt)
-    // Each step uses authFetch so the Supabase Bearer token is auto-injected.
-    const executionResponse = await authFetch('/api/executions', {
-      method: 'POST',
-      body: JSON.stringify({
-        strategy_id: activeStrategy.id,
-        strategy_name: activeStrategy.name,
-        symbol: params.symbol,
-        name: params.name || params.symbol,
-        sector: params.sector || 'Unknown',
-        cap_category: params.capCategory || 'large',
+    // Live trading: open Kite Publisher popup. The server-side execution
+    // record is no longer created here — live orders redirect to Kite and
+    // are tracked on the Kite platform (see /api/kite/publish for ticket
+    // issuance and the popup flow in kitePublisher.ts).
+    try {
+      await placeOrder({
         exchange: params.exchange || 'NSE',
-        entry_price: params.entryPrice,
-        stop_loss: params.stopLoss,
-        target1: params.target1,
-        target2: params.target2,
-        quantity: params.quantity,
-        product: params.product || 'CNC',
-        risk_amount: params.riskAmount,
-        risk_pct: params.riskPct,
-        charges_estimate: params.charges,
-        is_paper_trade: false,
-      }),
-    });
-    if (!executionResponse.ok) {
-      const error = await executionResponse.json().catch(() => ({}));
-      throw new Error(error.error || 'Failed to create execution record');
-    }
-    const execution = await executionResponse.json();
-    console.log('Execution record created:', execution);
-
-    const orderResponse = await authFetch('/api/kite/orders', {
-      method: 'POST',
-      body: JSON.stringify({
-        variety: 'regular',
         tradingsymbol: params.symbol,
-        exchange: params.exchange || 'NSE',
-        transaction_type: params.transactionType || 'BUY',
-        order_type: 'LIMIT',
+        transaction_type: 'BUY',
         quantity: params.quantity,
+        order_type: 'MARKET',
         product: params.product || 'CNC',
-        price: params.entryPrice,
-        tag: `strategy:${activeStrategy.id}`,
-      }),
-    });
-    if (!orderResponse.ok) {
-      const error = await orderResponse.json().catch(() => ({}));
-      throw new Error(error.error || 'Kite entry order failed');
+      });
+    } catch (err: any) {
+      const code: string | undefined = err?.code;
+      if (code === 'KITE_KEY_NOT_CONFIGURED') {
+        toast.error('Configure Kite API key first');
+        setActiveTab('settings');
+      } else {
+        toast.error(err?.message || 'Failed to place order');
+      }
+      throw err;
     }
-    const order = await orderResponse.json();
-    console.log('Kite entry order placed:', order);
-
-    // OCO GTT: leg 1 = target exit (SELL LIMIT @ target1), leg 2 = stop-loss (SELL SL-M @ stopLoss)
-    const gttResponse = await authFetch('/api/kite/gtt', {
-      method: 'POST',
-      body: JSON.stringify({
-        type: 'two-leg',
-        tradingsymbol: params.symbol,
-        exchange: params.exchange || 'NSE',
-        trigger_values: [params.target1, params.stopLoss],
-        last_price: params.entryPrice,
-        orders: [
-          {
-            transaction_type: 'SELL',
-            quantity: params.quantity,
-            order_type: 'LIMIT',
-            product: params.product || 'CNC',
-            price: params.target1,
-          },
-          {
-            transaction_type: 'SELL',
-            quantity: params.quantity,
-            order_type: 'SL-M',
-            product: params.product || 'CNC',
-          },
-        ],
-      }),
-    });
-    if (!gttResponse.ok) {
-      const error = await gttResponse.json().catch(() => ({}));
-      throw new Error(error.error || 'Kite GTT placement failed');
-    }
-    const gtt = await gttResponse.json();
-    console.log('Kite GTT placed:', gtt);
 
     toast.success(
-      `Live order placed: ${params.symbol} × ${params.quantity} (order ${order.order_id ?? 'ok'})`
+      `Order placed: ${params.symbol} × ${params.quantity}`
     );
-    return { execution, order, gtt };
+    return { orderPlaced: true };
   };
 
   // Fetch capital data for execute modal
@@ -400,8 +249,6 @@ function DashboardContent() {
         ) / picks.length
       ).toFixed(1)
     : '0';
-
-  const isKiteLive = activeDataSource.includes('Kite');
 
   return (
     <div className="flex flex-col min-h-screen selection:bg-slate-200 text-slate-800" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--ground)' }}>
@@ -505,13 +352,18 @@ function DashboardContent() {
               </span>
             </button>
 
-            {/* Zerodha status */}
+            {/* Data source indicator */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${isKiteLive ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+              <span className="w-2 h-2 rounded-full shrink-0 bg-slate-300" />
               <span className="text-[11px] font-medium whitespace-nowrap hidden sm:block" style={{ color: 'var(--text-secondary)' }}>
-                {isKiteLive ? 'Kite' : 'yfinance'}
+                yfinance
               </span>
             </div>
+
+            {/* Zerodha status button */}
+            <ZerodhaStatusButton
+              onNavigateToProfile={() => setActiveTab('settings')}
+            />
 
             {/* Divider */}
             <div className="w-px h-5 shrink-0" style={{ backgroundColor: 'var(--border-subtle)' }} />
@@ -566,26 +418,6 @@ function DashboardContent() {
                         {user.email}
                       </p>
                     </div>
-                    {/* Zerodha connection settings */}
-                    <button
-                      onClick={() => {
-                        setIsLoginCardOpen(false);
-                        setIsZerodhaModalOpen(true);
-                      }}
-                      className="w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
-                    >
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--elevated-2)' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}>
-                          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-                          <polyline points="10 17 15 12 10 7"/>
-                          <line x1="15" y1="12" x2="3" y2="12"/>
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Kite Settings</p>
-                        <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Connect or disconnect Zerodha</p>
-                      </div>
-                    </button>
                     <button
                       onClick={async () => {
                         setIsLoginCardOpen(false);
@@ -996,18 +828,17 @@ function DashboardContent() {
 
             {/* Executions Tab */}
             {activeTab === 'executions' && (
-              <ExecutionTracker
-                key={isLoggedIn ? 'authed' : 'guest'}
-                isLoggedIn={isLoggedIn}
+              <ComingSoonPlaceholder
+                title="Live Trades"
+                subtitle="Trades placed via Kite are tracked on the Kite platform."
               />
             )}
 
             {/* Analytics Tab */}
             {activeTab === 'analytics' && (
-              <PnLAnalytics
-                key={isLoggedIn ? 'authed' : 'guest'}
-                isLoggedIn={isLoggedIn}
-                onLoginClick={() => setIsZerodhaModalOpen(true)}
+              <ComingSoonPlaceholder
+                title="P&L Analytics"
+                subtitle="Coming after paper trading execution is complete."
               />
             )}
 
@@ -1026,14 +857,13 @@ function DashboardContent() {
         <MobileNav
           tabs={mobileNavTabs}
           activeTab={activeTab}
-          onChange={(id) => setActiveTab(id as typeof activeTab)}
-        />
-
-        {/* Zerodha Login & Settings Modal */}
-        <ZerodhaLoginModal
-          isOpen={isZerodhaModalOpen}
-          onClose={() => setIsZerodhaModalOpen(false)}
-          onCredentialsUpdated={() => runScan()}
+          onChange={(id) => {
+            if (id === 'executions' || id === 'analytics') {
+              toast.info('Coming soon');
+              return;
+            }
+            setActiveTab(id as typeof activeTab);
+          }}
         />
 
         {/* Execute Trade Modal */}

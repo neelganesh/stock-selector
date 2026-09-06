@@ -4,8 +4,8 @@
  * Authorization header is sent on every request.
  *
  * Usage:
- *   const data = await authFetch('/api/executions');
- *   const data = await authFetch('/api/executions', { method: 'POST', body: JSON.stringify(body) });
+ *   const data = await authFetch('/api/profile');
+ *   const data = await authFetch('/api/profile', { method: 'PATCH', body: JSON.stringify({ full_name: 'Alice' }) });
  *
  * On 401, calls onUnauthorized() from AuthContext if available,
  * then re-throws so callers can handle.
@@ -89,7 +89,7 @@ export class APIError extends Error {
  * Includes code field in error for programmatic handling.
  *
  * @example
- *   const executions = await authFetchJSON<Execution[]>('/api/executions');
+ *   const profile = await authFetchJSON<UserProfile>('/api/profile');
  *   try {
  *     const data = await authFetchJSON('/api/capital');
  *   } catch (err) {

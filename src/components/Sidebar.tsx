@@ -62,20 +62,6 @@ export const Sidebar: FC<SidebarProps> = ({ activeTab }) => {
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
                 Strategy Selector
               </span>
-              <button
-                onClick={runScanWithToast}
-                disabled={isScanning}
-                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
-                style={{
-                  color: isScanning ? 'var(--text-tertiary)' : 'var(--accent-brand)',
-                  backgroundColor: isScanning ? 'var(--elevated-2)' : 'var(--accent-brand-bg, rgba(59,130,246,0.12))',
-                  border: '1px solid var(--border-subtle)',
-                }}
-                aria-label={isScanning ? 'Scanning in progress' : 'Rescan now'}
-              >
-                <svg className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                {isScanning ? 'Scanning' : 'Rescan'}
-              </button>
             </div>
 
             <nav className="flex flex-col gap-2">
@@ -171,7 +157,7 @@ export const Sidebar: FC<SidebarProps> = ({ activeTab }) => {
           The button reflects its own busy state and names the symbol being
           processed. The canonical progress readout (percentage + progress
           line) lives in the top bar so there is exactly one scan gauge. */}
-      <div className="pt-2 mt-auto">
+      <div className="pt-4">
         <button
           onClick={() => runScanWithToast()}
           disabled={isScanning}

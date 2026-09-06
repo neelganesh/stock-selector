@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../_auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;
@@ -22,9 +22,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (req.method === 'GET') {
-      // Whitelist of client-safe fields. Never expose Zerodha credentials.
-      // Secret + access_token are server-side only; client must use the
-      // /api/kite routes which read them via service role.
       console.log('[settings] GET - user:', user.id);
       
       let { data, error } = await supabase
@@ -34,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           total_capital, risk_per_trade_pct, max_position_pct,
           max_sector_pct, max_open_strategies, daily_loss_limit_pct,
           paper_trading_enabled, paper_trading_capital,
-          zerodha_api_key, zerodha_api_secret,
+          kite_api_key,
           created_at, updated_at
         `)
         .eq('user_id', user.id)
@@ -90,6 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'paper_trading_enabled',
         'paper_trading_capital',
         'full_name',
+        'kite_api_key',
       ];
 
       // Field-level numeric validation

@@ -65,6 +65,11 @@ vi.mock('../../context/StrategyContext', () => ({
   }),
 }));
 
+// Mock ZerodhaStatusButton to prevent network calls to /api/kite/key-status
+vi.mock('../ZerodhaStatusButton', () => ({
+  ZerodhaStatusButton: vi.fn(() => null),
+}));
+
 // Mock capital fetch so we don't try to hit network in jsdom.
 globalThis.fetch = vi.fn().mockResolvedValue({
   ok: false,

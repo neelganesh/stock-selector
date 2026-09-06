@@ -114,6 +114,10 @@ const BASE_PRICES: Record<string, number> = {
 // ---------------------------------------------------------------------------
 let _seedUniverse: RawStockData[] | null = null;
 
+// Build a symbol -> sector lookup from seed data for DB hydration fallback
+const SEED_SECTOR_MAP: Record<string, string> = {};
+SEED_UNIVERSE.forEach((s) => { SEED_SECTOR_MAP[s.symbol] = s.sector; });
+
 function buildSeedUniverse(): RawStockData[] {
   if (_seedUniverse) return _seedUniverse;
   _seedUniverse = SEED_UNIVERSE.map((stock) => {
@@ -159,10 +163,12 @@ function hydrateTicker(row: DbTicker): RawStockData {
   // real Kite/yfinance data flows in. Strategies only use these for filtering.)
   const marketCapVal = row.cap_category === 'large' ? 500000 : row.cap_category === 'mid' ? 75000 : 25000;
   const volumeVal = row.cap_category === 'large' ? 5000000 : row.cap_category === 'mid' ? 2000000 : 3000000;
+  // Use DB sector, fall back to seed map (which has FMCG etc), then 'Unknown'
+  const sector = row.sector || SEED_SECTOR_MAP[row.symbol] || 'Unknown';
   return {
     symbol: row.symbol,
     name: row.company_name,
-    sector: row.sector || 'Unknown',
+    sector,
     industry: row.industry || null,
     capCategory: row.cap_category as 'large' | 'mid' | 'small',
     tradingSegment: 'F&O Segment',

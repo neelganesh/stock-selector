@@ -1,6 +1,5 @@
 import type { StockPick, StrategyDefinition, CapCategory, ScanProgress, RawStockData } from './types';
 import { getUniverse } from '../services/universeService';
-import { getKiteCredentials, fetchKiteCandles } from '../services/kiteService';
 import { fetchYFinanceData, clearYFinanceCache } from '../services/yfinanceService';
 
 export interface ScanOptions {
@@ -8,21 +7,20 @@ export interface ScanOptions {
   capCategory: CapCategory;
   customScrips?: string[];
   onProgress?: (progress: ScanProgress) => void;
-  onDataSourceDetermined?: (source: 'Zerodha Kite API (Live)' | 'yfinance (Fallback)') => void;
+  onDataSourceDetermined?: (source: 'yfinance') => void;
   chunkSize?: number;
   delayBetweenChunksMs?: number;
 }
 
 /**
- * Robust Parallel Stock Scanning Engine
- * - Iterates over Large, Mid, and Small Cap universe
- * - Evaluates Zerodha Kite API live historical candles if authenticated
- * - Seamlessly falls back to yfinance (Yahoo Finance) if Zerodha Key/Historical subscription is missing or returns 403
- * - Provides real-time progress & data source reporting
+ * Stock Scanning Engine using yfinance for historical data.
+ * 
+ * Note: Kite Publisher mode is used for ORDER PLACEMENT only (see kitePublisher.ts).
+ * Historical price data comes from yfinance.
  */
 export async function runParallelStockScan(options: ScanOptions): Promise<{
   picks: StockPick[];
-  activeDataSource: 'Zerodha Kite API (Live)' | 'yfinance (Fallback)';
+  activeDataSource: 'yfinance';
 }> {
   const {
     strategy,
@@ -33,13 +31,7 @@ export async function runParallelStockScan(options: ScanOptions): Promise<{
     delayBetweenChunksMs = 40,
   } = options;
 
-  const creds = getKiteCredentials();
-  const isKiteEligible = Boolean(creds.apiKey && (creds.accessToken || creds.requestToken) && creds.hasHistoricalAccess);
-  
-  let determinedDataSource: 'Zerodha Kite API (Live)' | 'yfinance (Fallback)' = isKiteEligible
-    ? 'Zerodha Kite API (Live)'
-    : 'yfinance (Fallback)';
-
+  const determinedDataSource: 'yfinance' = 'yfinance';
   onDataSourceDetermined?.(determinedDataSource);
 
   // Clear memory cache so fresh live values are always refetched
@@ -82,30 +74,12 @@ export async function runParallelStockScan(options: ScanOptions): Promise<{
         try {
           let stockDataToScan: RawStockData = { ...stock };
 
-          if (determinedDataSource === 'Zerodha Kite API (Live)') {
-            const kiteResult = await fetchKiteCandles(stock.symbol, creds);
-            if (kiteResult) {
-              stockDataToScan.prices = kiteResult.prices;
-              stockDataToScan.volumeHistory = kiteResult.volumeHistory;
-              stockDataToScan.dataSource = kiteResult.dataSource;
-            } else {
-              // Kite failed or no historical permission -> switch session fallback to yfinance
-              determinedDataSource = 'yfinance (Fallback)';
-              onDataSourceDetermined?.(determinedDataSource);
-              const yfData = await fetchYFinanceData(stock.symbol, stock.prices[0]);
-              stockDataToScan.prices = yfData.prices;
-              stockDataToScan.volumeHistory = yfData.volumeHistory;
-              stockDataToScan.sectorNavHistory = yfData.sectorNavHistory;
-              stockDataToScan.dataSource = 'yfinance (Fallback)';
-            }
-          } else {
-            // Fetch / use yfinance data
-            const yfData = await fetchYFinanceData(stock.symbol, stock.prices[0]);
-            stockDataToScan.prices = yfData.prices;
-            stockDataToScan.volumeHistory = yfData.volumeHistory;
-            stockDataToScan.sectorNavHistory = yfData.sectorNavHistory;
-            stockDataToScan.dataSource = 'yfinance (Fallback)';
-          }
+          // Fetch / use yfinance data
+          const yfData = await fetchYFinanceData(stock.symbol, stock.prices[0]);
+          stockDataToScan.prices = yfData.prices;
+          stockDataToScan.volumeHistory = yfData.volumeHistory;
+          stockDataToScan.sectorNavHistory = yfData.sectorNavHistory;
+          stockDataToScan.dataSource = 'yfinance';
 
           // Small micro-task tick for UI smoothness
           await new Promise((resolve) => setTimeout(resolve, 15));
