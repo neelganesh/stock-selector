@@ -692,10 +692,39 @@ function KiteSettings({
   isResetting: boolean;
 }) {
   const isConfigured = !!apiKey && !!hasApiSecret;
-  const isCredentialsLocked = !!hasApiSecret;
   const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
   const isExpired = expiresAtDate ? expiresAtDate < new Date() : true;
   const needsToken = !expiresAt || isExpired;
+
+  // 3 states:
+  // 1. Fully connected (credentials + active token) → status only, no form
+  // 2. Configured but token expired/missing → Generate Token button
+  // 3. Not configured → show form
+
+  // Fully active - no form needed
+  if (isConfigured && !needsToken) {
+    return (
+      <GlassCard variant="default" padding="lg" className="space-y-4">
+        <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+          <Icon name="plug" size={15} strokeWidth={2} />
+          Zerodha Kite API
+        </h3>
+        <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full bg-emerald-500" />
+            <div>
+              <div className="text-sm font-bold text-slate-900">Connected</div>
+              {expiresAtDate && (
+                <div className="text-xs text-slate-500">
+                  Expires: {expiresAtDate.toLocaleString('en-IN')}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+    );
+  }
 
   return (
     <GlassCard variant="default" padding="lg" className="space-y-4">
@@ -704,35 +733,26 @@ function KiteSettings({
         Zerodha Kite API
       </h3>
 
+      {/* Status Banner */}
       <div
         className={`flex items-center justify-between p-3 rounded-xl ${
-          isConfigured && !needsToken
-            ? 'bg-emerald-50 border border-emerald-200'
-            : isConfigured && needsToken
-            ? 'bg-amber-50 border border-amber-200'
-            : 'bg-rose-50 border border-rose-200'
+          isConfigured ? 'bg-amber-50 border border-amber-200' : 'bg-rose-50 border border-rose-200'
         }`}
       >
         <div className="flex items-center gap-3">
-          <div
-            className={`w-3 h-3 rounded-full ${
-              isConfigured && !needsToken ? 'bg-emerald-500 animate-pulse' : 
-              isConfigured && needsToken ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'
-            }`}
-          />
+          <div className={`w-3 h-3 rounded-full ${isConfigured ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} />
           <div>
             <div className="text-sm font-bold text-slate-900">
-              {isConfigured && !needsToken ? 'Connected' : 
-               isConfigured && needsToken ? 'Token Expired' : 'Not Configured'}
+              {isConfigured ? 'Token Expired' : 'Not Configured'}
             </div>
-            {expiresAtDate && (
+            {expiresAtDate && isConfigured && (
               <div className="text-xs text-slate-500">
-                {needsToken ? 'Expired' : 'Expires'}: {expiresAtDate.toLocaleString('en-IN')}
+                Expired: {expiresAtDate.toLocaleString('en-IN')}
               </div>
             )}
           </div>
         </div>
-        {isConfigured && needsToken && (
+        {isConfigured && (
           <button
             onClick={handleGenerateToken}
             disabled={isGeneratingToken}
@@ -743,49 +763,52 @@ function KiteSettings({
         )}
       </div>
 
-      <div>
-        <label className="block text-xs font-bold text-slate-700 mb-1">
-          Kite API Key
-        </label>
-        <input
-          type="text"
-          value={draft?.zerodha_api_key ?? ''}
-          onChange={e => updateDraft('zerodha_api_key', e.target.value)}
-          placeholder="e.g. 5u968to2eligtgz8"
-          disabled={isCredentialsLocked}
-          className={`w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs ${isCredentialsLocked ? 'bg-slate-100 cursor-not-allowed text-slate-500' : 'focus:bg-white'}`}
-        />
-      </div>
+      {/* Form - only shown when NOT configured */}
+      {!isConfigured && (
+        <>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Kite API Key
+            </label>
+            <input
+              type="text"
+              value={draft?.zerodha_api_key ?? ''}
+              onChange={e => updateDraft('zerodha_api_key', e.target.value)}
+              placeholder="e.g. 5u968to2eligtgz8"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs focus:bg-white"
+            />
+          </div>
 
-      <div>
-        <label className="block text-xs font-bold text-slate-700 mb-1">
-          Kite API Secret <span className="text-rose-500">*</span>
-        </label>
-        <input
-          type="password"
-          value={isCredentialsLocked ? '••••••••••••••••' : (draft as any)?.zerodha_api_secret ?? ''}
-          onChange={e => updateDraft('zerodha_api_secret' as any, e.target.value as any)}
-          placeholder={isCredentialsLocked ? 'Saved (locked)' : '••••••••••••••••'}
-          disabled={isCredentialsLocked}
-          className={`w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs ${isCredentialsLocked ? 'bg-slate-100 cursor-not-allowed text-slate-500' : 'focus:bg-white'}`}
-        />
-      </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Kite API Secret <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="password"
+              value={(draft as any)?.zerodha_api_secret ?? ''}
+              onChange={e => updateDraft('zerodha_api_secret' as any, e.target.value as any)}
+              placeholder="••••••••••••••••"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white/70 focus:ring-2 focus:ring-slate-900 focus:outline-none transition-all font-mono text-xs focus:bg-white"
+            />
+          </div>
 
-      <button
-        onClick={handleSave}
-        disabled={isSaving || isCredentialsLocked}
-        className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors w-full sm:w-auto"
-      >
-        {isSaving ? 'Saving…' : isCredentialsLocked ? 'Credentials Saved' : 'Save Credentials'}
-      </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 transition-colors w-full sm:w-auto"
+          >
+            {isSaving ? 'Saving…' : 'Save Credentials'}
+          </button>
+        </>
+      )}
 
-      {isCredentialsLocked && (
+      {isConfigured && (
         <button
           onClick={handleReset}
           disabled={isResetting}
           className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 transition-colors"
         >
-          {isResetting ? 'Resetting...' : 'Reset'}
+          {isResetting ? 'Resetting...' : 'Reset Credentials'}
         </button>
       )}
 
