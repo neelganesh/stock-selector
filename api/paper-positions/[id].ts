@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
@@ -17,14 +17,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     throw err;
   }
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
 
   try {
     if (req.method === 'PATCH') {
       const { status, exit_filled_price, exit_filled_at, notes, tags } = req.body;
 
       // Fetch current position
-      const { data: current, error: fetchError } = await userSupabase
+      const { data: current, error: fetchError } = await supabase
         .from('paper_positions')
         .select('*')
         .eq('id', id)
@@ -48,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         total_charges = Math.round((total_charges + exitCharges) * 100) / 100;
       }
 
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('paper_positions')
         .update({
           ...(status && { status }),
@@ -71,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'DELETE') {
-      const { error } = await userSupabase
+      const { error } = await supabase
         .from('paper_positions')
         .delete()
         .eq('id', id)

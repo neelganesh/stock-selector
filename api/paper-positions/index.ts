@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
@@ -12,10 +12,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       throw err;
     }
-    const { user, supabase: userSupabase } = auth;
+    const { user } = auth;
+    const supabase = getSupabaseAdmin();
 
     try {
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('paper_positions')
         .select('*')
         .eq('user_id', user.id)
@@ -43,7 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     throw err;
   }
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
 
   try {
     const {
@@ -74,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const entryFilledAt = new Date().toISOString();
 
     // Create paper position record
-    const { data: paperPosition, error: paperError } = await userSupabase
+    const { data: paperPosition, error: paperError } = await supabase
       .from('paper_positions')
       .insert({
         user_id: user.id,

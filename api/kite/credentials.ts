@@ -6,7 +6,7 @@
  * 2. Credentials should only be set through this dedicated flow
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from './_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from './_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;
@@ -19,7 +19,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     throw err;
   }
 
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
 
   try {
     if (req.method === 'PUT') {
@@ -45,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Update the user's profile with Zerodha credentials
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('user_profiles')
         .update({
           zerodha_api_key: apiKey,

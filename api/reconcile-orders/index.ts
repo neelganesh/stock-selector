@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 interface KiteOrder {
   order_id: string;
@@ -49,14 +49,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     throw err;
   }
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
 
   try {
     // 1. Fetch all open/pending executions from local DB
     // Schema enum: pending, entry_placed, entry_filled, gtt_placed,
     //   target1_hit, target2_hit, stop_loss_hit, manually_exited, cancelled, rejected.
     // Note: 'pending_entry' and 'partial_exit' are legacy names that never existed in schema.
-    const { data: executions, error: execError } = await userSupabase
+    const { data: executions, error: execError } = await supabase
       .from('strategy_executions')
       .select('*')
       .eq('user_id', user.id)
@@ -228,7 +229,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Mark as filled if Kite shows COMPLETE
           const ko = kiteOrderMap.get(d.order_id!);
           if (ko) {
-            const { error: updateError } = await userSupabase
+            const { error: updateError } = await supabase
               .from('strategy_executions')
               .update({
                 status: 'entry_filled',

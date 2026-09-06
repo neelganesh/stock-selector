@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;
@@ -11,11 +11,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     throw err;
   }
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
 
   if (req.method === 'GET') {
     try {
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('trade_cash_flows')
         .select('*')
         .eq('user_id', user.id)

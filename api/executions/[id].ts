@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;
@@ -11,7 +11,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     throw err;
   }
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
   const { id } = req.query;
 
   if (!id || typeof id !== 'string') {
@@ -22,13 +23,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET') {
       // Get single execution with cash flows
       const [execution, cashFlows] = await Promise.all([
-        userSupabase
+        supabase
           .from('strategy_executions')
           .select('*')
           .eq('id', id)
           .eq('user_id', user.id)
           .single(),
-        userSupabase
+        supabase
           .from('trade_cash_flows')
           .select('*')
           .eq('execution_id', id)
@@ -45,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Update execution status
       const updates = req.body;
 
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('strategy_executions')
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id)
@@ -58,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // If status changed to filled/exited, add cash flow
       // Note: Schema column is 'type' (NOT 'flow_type')
       if (updates.status === 'entry_filled' && updates.entry_filled_price) {
-        await userSupabase.from('trade_cash_flows').insert({
+        await supabase.from('trade_cash_flows').insert({
           execution_id: id,
           user_id: user.id,
           type: 'entry', // FIX: was 'flow_type' - column name is 'type'
@@ -70,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (['target1_hit', 'target2_hit', 'stop_loss_hit', 'manually_exited'].includes(updates.status) && updates.exit_filled_price) {
         const pnl = (updates.exit_filled_price - updates.entry_filled_price) * updates.quantity;
-        await userSupabase.from('trade_cash_flows').insert({
+        await supabase.from('trade_cash_flows').insert({
           execution_id: id,
           user_id: user.id,
           type: 'exit', // FIX: was 'flow_type'
@@ -78,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           date: new Date().toISOString(),
           description: `Exit: ${updates.quantity} ${updates.symbol} @ ${updates.exit_filled_price}`,
         });
-        await userSupabase.from('trade_cash_flows').insert({
+        await supabase.from('trade_cash_flows').insert({
           execution_id: id,
           user_id: user.id,
           type: 'charge', // FIX: was 'flow_type'
@@ -93,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'DELETE') {
       // Cancel execution
-      const { error } = await userSupabase
+      const { error } = await supabase
         .from('strategy_executions')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('id', id)

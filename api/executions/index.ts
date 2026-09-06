@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;
@@ -11,11 +11,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     throw err;
   }
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
 
   if (req.method === 'GET') {
     try {
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('strategy_executions')
         .select('*')
         .eq('user_id', user.id)
@@ -60,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Create execution record. Schema uses 'pending' (not 'pending_entry'),
       // no 'capital_allocated' column (derived from entry_price * quantity),
       // and includes name/sector/cap_category for display.
-      const { data: execution, error: execError } = await userSupabase
+      const { data: execution, error: execError } = await supabase
         .from('strategy_executions')
         .insert({
           user_id: user.id,
@@ -91,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Create initial cash flow record. Schema column is `type` (not `flow_type`)
       // and 'type' enum values are: 'entry' | 'exit' | 'charge' | 'dividend'.
       const capitalAllocated = entry_price * quantity;
-      await userSupabase.from('trade_cash_flows').insert({
+      await supabase.from('trade_cash_flows').insert({
         execution_id: execution.id,
         user_id: user.id,
         type: 'entry',

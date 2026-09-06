@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError, supabaseAdmin } from '../kite/_client.js';
+import { requireAuth, kiteRequest, getUserKiteCredentials, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 /**
  * Capital API - Returns user capital data including deployed/available amounts.
@@ -29,11 +29,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
   }
 
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  const supabase = getSupabaseAdmin();
   console.log('[capital API] Processing request for user:', user.id);
 
   // Fetch or create user profile
-  let profile = await getOrCreateUserProfile(userSupabase, user);
+  let profile = await getOrCreateUserProfile(supabase, user);
   if (!profile) {
     console.error('[capital API] Failed to get or create profile for user:', user.id);
     return res.status(500).json({ 
@@ -44,8 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Fetch open positions from DB
-  const openExecutions = await getOpenExecutions(userSupabase, user.id);
-  const paperPositions = await getOpenPaperPositions(userSupabase, user.id);
+  const openExecutions = await getOpenExecutions(supabase, user.id);
+  const paperPositions = await getOpenPaperPositions(supabase, user.id);
 
   // Fetch live data from Zerodha (optional - don't fail if unavailable)
   const { availableMargin, portfolioDeployed } = await getLiveCapitalData(user.id);
@@ -67,9 +68,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  * Get user profile or create default if missing.
  * Uses admin client to bypass RLS for both read and write.
  */
-async function getOrCreateUserProfile(userSupabase: any, user: { id: string; email?: string }): Promise<any | null> {
+async function getOrCreateUserProfile(supabase: any, user: { id: string; email?: string }): Promise<any | null> {
   // Try to get existing profile - use admin client to bypass RLS
-  const { data: profile } = await supabaseAdmin
+  const { data: profile } = await supabase
     .from('user_profiles')
     .select('*')
     .eq('user_id', user.id)
@@ -112,8 +113,8 @@ async function getOrCreateUserProfile(userSupabase: any, user: { id: string; ema
 /**
  * Get open strategy executions for capital calculation.
  */
-async function getOpenExecutions(userSupabase: any, userId: string): Promise<any[]> {
-  const { data: executions } = await userSupabase
+async function getOpenExecutions(supabase: any, userId: string): Promise<any[]> {
+  const { data: executions } = await supabase
     .from('strategy_executions')
     .select('risk_amount, status, entry_price, quantity')
     .eq('user_id', userId)
@@ -124,8 +125,8 @@ async function getOpenExecutions(userSupabase: any, userId: string): Promise<any
 /**
  * Get open paper positions for capital calculation.
  */
-async function getOpenPaperPositions(userSupabase: any, userId: string): Promise<any[]> {
-  const { data: positions } = await userSupabase
+async function getOpenPaperPositions(supabase: any, userId: string): Promise<any[]> {
+  const { data: positions } = await supabase
     .from('paper_positions')
     .select('risk_amount, risk_pct, status, entry_filled_price, quantity, charges_estimate')
     .eq('user_id', userId)
