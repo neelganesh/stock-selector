@@ -19,6 +19,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Whitelist of client-safe fields. Never expose Zerodha credentials.
       // Secret + access_token are server-side only; client must use the
       // /api/kite routes which read them via service role.
+      console.log('[settings] GET - user:', user.id);
+      
       let { data, error } = await userSupabase
         .from('user_profiles')
         .select(`
@@ -31,10 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('user_id', user.id)
         .maybeSingle();
 
+      console.log('[settings] GET - query result: data=', !!data, 'error=', error?.message);
+
       // If no profile exists, create one with defaults
       if (!data) {
         console.log('[settings] No profile found for user', user.id, '- creating with defaults');
-        if (error) console.error('[settings] Profile fetch error:', JSON.stringify(error));
         const { data: newProfile, error: createError } = await userSupabase
           .from('user_profiles')
           .insert({
@@ -55,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
         if (createError) {
           console.error('[settings] Failed to create profile:', JSON.stringify(createError));
-          return res.status(500).json({ error: 'Failed to create profile', details: createError.message });
+          return res.status(500).json({ error: 'Failed to create profile', details: createError?.message });
         }
         console.log('[settings] Profile created:', newProfile?.id);
         return res.status(200).json(newProfile);
@@ -66,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'PATCH') {
       const updates = req.body;
+      console.log('[settings] PATCH - user:', user.id, 'updates:', JSON.stringify(updates));
 
       // Whitelist of allowed fields (prevents arbitrary overwrites)
       // Note: Zerodha credentials should be set via the dedicated /api/kite/credentials endpoint
