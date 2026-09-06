@@ -680,7 +680,7 @@ function KiteSettings({
 
       {isCredentialsLocked && (
         <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
-          <Icon name="lock" size={14} strokeWidth={2} />
+          <Icon name="info" size={14} strokeWidth={2} />
           <span>Credentials are locked. Login again if session expires.</span>
         </div>
       )}
