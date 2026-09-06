@@ -44,7 +44,7 @@ export function MobileSidebarDrawer({ children }: MobileSidebarDrawerProps) {
         aria-expanded={open}
         aria-controls="mobile-sidebar-drawer"
         onClick={() => setOpen(true)}
-        className="fixed top-3 left-3 z-40 inline-flex items-center justify-center w-10 h-10 rounded-[var(--card-radius)] kite-card text-[color:var(--text-primary)] active:scale-95 transition"
+        className="fixed top-1 left-3 z-40 inline-flex items-center justify-center w-10 h-10 rounded-[var(--card-radius)] kite-card text-[color:var(--text-primary)] active:scale-95 transition"
         data-testid="mobile-drawer-trigger"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
