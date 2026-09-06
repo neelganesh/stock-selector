@@ -566,6 +566,26 @@ function DashboardContent() {
                         {user.email}
                       </p>
                     </div>
+                    {/* Zerodha connection settings */}
+                    <button
+                      onClick={() => {
+                        setIsLoginCardOpen(false);
+                        setIsZerodhaModalOpen(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--elevated-2)' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}>
+                          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                          <polyline points="10 17 15 12 10 7"/>
+                          <line x1="15" y1="12" x2="3" y2="12"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Kite Settings</p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Connect or disconnect Zerodha</p>
+                      </div>
+                    </button>
                     <button
                       onClick={async () => {
                         setIsLoginCardOpen(false);
