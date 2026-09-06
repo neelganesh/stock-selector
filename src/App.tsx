@@ -417,8 +417,8 @@ function DashboardContent() {
       >
         {/* Top row: brand + nav + account */}
         <div className="flex items-center h-12 px-3 gap-3">
-          {/* Brand */}
-          <div className="flex items-center shrink-0" style={{ gap: '0.5rem' }}>
+          {/* Brand — only visible on desktop. On mobile the hamburger (fixed, top-left) handles nav. */}
+          <div className="hidden lg:flex items-center shrink-0" style={{ gap: '0.5rem' }}>
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ backgroundColor: 'var(--accent-brand)' }}
@@ -437,7 +437,7 @@ function DashboardContent() {
                 <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
-            <span className="hidden md:block font-semibold" style={{ color: 'var(--text-primary)', fontSize: '14px' }}>
+            <span className="font-semibold" style={{ color: 'var(--text-primary)', fontSize: '14px' }}>
               Quant Vision
             </span>
           </div>
