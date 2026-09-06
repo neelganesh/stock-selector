@@ -15,10 +15,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { user } = auth;
   // Use admin client directly - user ID from auth is sufficient for security
   const supabase = getSupabaseAdmin();
-  
-  console.log('[settings] supabase url:', supabase.supabaseUrl);
-  console.log('[settings] user id:', user.id);
-  console.log('[settings] user email:', user.email);
 
   try {
     if (req.method === 'GET') {

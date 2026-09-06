@@ -1,7 +1,6 @@
 /**
- * Tests for the Kite API route handlers.
+ * Tests for the consolidated /api/kite handler (GET, POST, POST?publish=true, DELETE).
  *
- * Each handler is imported and called directly with a mock VercelRequest/VercelResponse.
  * Auth and crypto are mocked to isolate the route logic.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -27,24 +26,19 @@ vi.mock('../_crypto', () => {
       const parts = v.split(':');
       if (parts.length !== 4) throw new Error('invalid');
       // For values with tag < 10 chars (e.g. 'v1:bad:tag:ct'), throw CryptoError
-      // (key-status handler catches CryptoError → working:false)
       if (parts[2].length < 10) {
         throw new CryptoError('invalid auth tag');
       }
       return Buffer.from(parts[3], 'base64').toString('utf8');
     }),
-    isValidKiteKeyFormat: vi.fn((v: string) => /^kite/i.test(v) && v.length >= 10),
     CryptoError,
   };
 });
 
 // ---------------------------------------------------------------------------
-// Imports — must come AFTER vi.mock()
+// Import — must come AFTER vi.mock()
 // ---------------------------------------------------------------------------
-import saveKeyHandler from '../kite/save-key';
-import deleteKeyHandler from '../kite/delete-key';
-import keyStatusHandler from '../kite/key-status';
-import publishHandler from '../kite/publish';
+import kiteHandler from '../kite/index';
 import { getSupabaseAdmin } from '../_auth';
 
 // ---------------------------------------------------------------------------
@@ -53,148 +47,49 @@ import { getSupabaseAdmin } from '../_auth';
 function mockRes(): {
   _status: number;
   _data: unknown;
+  _ended: boolean;
   status: ReturnType<typeof vi.fn>;
   json: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
 } {
   const res: ReturnType<typeof mockRes> = {} as ReturnType<typeof mockRes>;
   res.status = vi.fn((code: number) => { res._status = code; return res as unknown as VercelResponse; });
   res.json = vi.fn((data: unknown) => { res._data = data; return res as unknown as VercelResponse; });
+  res.end = vi.fn(() => { res._ended = true; return res as unknown as VercelResponse; });
   return res;
 }
 
-function makeReq(method: string, body?: unknown): VercelRequest {
-  return { method, body: body as VercelRequest['body'], headers: {} } as unknown as VercelRequest;
+function makeReq(method: string, body?: unknown, query?: Record<string, unknown>): VercelRequest {
+  return {
+    method,
+    body: body as VercelRequest['body'],
+    query: query as VercelRequest['query'],
+    headers: {},
+  } as unknown as VercelRequest;
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/kite/save-key
+// GET /api/kite — key status
 // ---------------------------------------------------------------------------
-describe('POST /api/kite/save-key', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns 400 for missing api_key', async () => {
-    const req = makeReq('POST', {});
-    const res = mockRes();
-    await saveKeyHandler(req, res);
-    expect(res._status).toBe(400);
-    expect((res._data as any).error).toContain('required');
-  });
-
-  it('returns 400 for empty string api_key', async () => {
-    const req = makeReq('POST', { api_key: '   ' });
-    const res = mockRes();
-    await saveKeyHandler(req, res);
-    expect(res._status).toBe(400);
-  });
-
-  it('returns 400 for invalid format', async () => {
-    const req = makeReq('POST', { api_key: 'not-a-kite-key' });
-    const res = mockRes();
-    await saveKeyHandler(req, res);
-    expect(res._status).toBe(400);
-    expect((res._data as any).success).toBe(false);
-  });
-
-  it('returns 200 for valid key', async () => {
-    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    });
-
-    const req = makeReq('POST', { api_key: 'kite_abcdefghij' });
-    const res = mockRes();
-    await saveKeyHandler(req, res);
-    expect(res._status).toBe(200);
-    expect((res._data as any).success).toBe(true);
-  });
-
-  it('returns 405 for non-POST method', async () => {
-    const req = makeReq('GET');
-    const res = mockRes();
-    await saveKeyHandler(req, res);
-    expect(res._status).toBe(405);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// DELETE /api/kite/delete-key
-// ---------------------------------------------------------------------------
-describe('DELETE /api/kite/delete-key', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns 200 and clears the key', async () => {
-    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-      }),
-    });
-
-    const req = makeReq('DELETE');
-    const res = mockRes();
-    await deleteKeyHandler(req, res);
-    expect(res._status).toBe(200);
-    expect((res._data as any).success).toBe(true);
-  });
-
-  it('returns 500 when Supabase errors', async () => {
-    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: { message: 'db error' } }),
-        }),
-      }),
-    });
-
-    const req = makeReq('DELETE');
-    const res = mockRes();
-    await deleteKeyHandler(req, res);
-    expect(res._status).toBe(500);
-  });
-
-  it('returns 405 for non-DELETE method', async () => {
-    const req = makeReq('POST');
-    const res = mockRes();
-    await deleteKeyHandler(req, res);
-    expect(res._status).toBe(405);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/kite/key-status
-// ---------------------------------------------------------------------------
-describe('GET /api/kite/key-status', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+describe('GET /api/kite', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it('returns configured:false when no key is stored', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
+          eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
         }),
       }),
     });
-
     const req = makeReq('GET');
     const res = mockRes();
-    await keyStatusHandler(req, res);
+    await kiteHandler(req, res);
     expect(res._status).toBe(200);
     expect((res._data as any).configured).toBe(false);
   });
 
-  it('returns configured:true, working:true when key decrypts successfully', async () => {
+  it('returns configured:true with maskedKey when key decrypts', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -207,16 +102,16 @@ describe('GET /api/kite/key-status', () => {
         }),
       }),
     });
-
     const req = makeReq('GET');
     const res = mockRes();
-    await keyStatusHandler(req, res);
+    await kiteHandler(req, res);
     expect(res._status).toBe(200);
     expect((res._data as any).configured).toBe(true);
-    expect((res._data as any).working).toBe(true);
+    expect((res._data as any).maskedKey).toBeTruthy();
+    expect((res._data as any).maskedKey).not.toContain('kite');
   });
 
-  it('returns configured:true, working:false when decrypt throws CryptoError', async () => {
+  it('returns configured:false when decrypt throws', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -229,50 +124,102 @@ describe('GET /api/kite/key-status', () => {
         }),
       }),
     });
-
     const req = makeReq('GET');
     const res = mockRes();
-    await keyStatusHandler(req, res);
+    await kiteHandler(req, res);
     expect(res._status).toBe(200);
-    expect((res._data as any).configured).toBe(true);
-    expect((res._data as any).working).toBe(false);
+    expect((res._data as any).configured).toBe(false);
   });
 
   it('returns 405 for non-GET method', async () => {
-    const req = makeReq('POST');
+    const req = makeReq('PATCH');
     const res = mockRes();
-    await keyStatusHandler(req, res);
+    await kiteHandler(req, res);
     expect(res._status).toBe(405);
   });
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/kite/publish
+// POST /api/kite — save key
 // ---------------------------------------------------------------------------
-describe('POST /api/kite/publish', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe('POST /api/kite (save key)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('returns 400 for missing api_key', async () => {
+    const req = makeReq('POST', {});
+    const res = mockRes();
+    await kiteHandler(req, res);
+    expect(res._status).toBe(400);
+    expect((res._data as any).error).toContain('api_key');
   });
 
-  it('returns 404 when no key is configured', async () => {
+  it('returns 400 for empty string api_key', async () => {
+    const req = makeReq('POST', { api_key: '   ' });
+    const res = mockRes();
+    await kiteHandler(req, res);
+    expect(res._status).toBe(400);
+  });
+
+  it('returns 400 for key that is too short', async () => {
+    const req = makeReq('POST', { api_key: 'abc' });
+    const res = mockRes();
+    await kiteHandler(req, res);
+    expect(res._status).toBe(400);
+    expect((res._data as any).error).toContain('invalid');
+  });
+
+  it('returns 200 for valid key', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
         }),
       }),
     });
-
-    const req = makeReq('POST');
+    const req = makeReq('POST', { api_key: 'kite_abcdefghijkl' });
     const res = mockRes();
-    await publishHandler(req, res);
-    expect(res._status).toBe(404);
-    expect((res._data as any).code).toBe('KITE_KEY_NOT_CONFIGURED');
+    await kiteHandler(req, res);
+    expect(res._status).toBe(200);
+    expect((res._data as any).success).toBe(true);
   });
 
-  it('returns 200 with apiKey when key decrypts successfully', async () => {
+  it('returns 500 when Supabase update fails', async () => {
+    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: { message: 'db error' } }),
+        }),
+      }),
+    });
+    const req = makeReq('POST', { api_key: 'kite_abcdefghijkl' });
+    const res = mockRes();
+    await kiteHandler(req, res);
+    expect(res._status).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/kite?publish=true — publish ticket
+// ---------------------------------------------------------------------------
+describe('POST /api/kite?publish=true (publish ticket)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('returns 400 when no key is configured', async () => {
+    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+        }),
+      }),
+    });
+    const req = makeReq('POST', {}, { publish: 'true' });
+    const res = mockRes();
+    await kiteHandler(req, res);
+    expect(res._status).toBe(400);
+    expect((res._data as any).error).toContain('No Kite API key');
+  });
+
+  it('returns 200 with ticket when key is configured', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -285,17 +232,15 @@ describe('POST /api/kite/publish', () => {
         }),
       }),
     });
-
-    const req = makeReq('POST');
+    const req = makeReq('POST', {}, { publish: 'true' });
     const res = mockRes();
-    await publishHandler(req, res);
+    await kiteHandler(req, res);
     expect(res._status).toBe(200);
-    expect((res._data as any).apiKey).toBeTruthy();
-    expect((res._data as any).nonce).toBeTruthy();
-    expect((res._data as any).ttlSeconds).toBe(60);
+    expect((res._data as any).ticket).toBeTruthy();
+    expect((res._data as any).expiresAt).toBeTruthy();
   });
 
-  it('returns 500 when decrypt fails', async () => {
+  it('returns 400 when decrypt fails', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -308,18 +253,45 @@ describe('POST /api/kite/publish', () => {
         }),
       }),
     });
-
-    const req = makeReq('POST');
+    const req = makeReq('POST', {}, { publish: 'true' });
     const res = mockRes();
-    await publishHandler(req, res);
-    expect(res._status).toBe(500);
-    expect((res._data as any).code).toBe('KITE_KEY_DECRYPT_FAILED');
+    await kiteHandler(req, res);
+    expect(res._status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/kite — delete key
+// ---------------------------------------------------------------------------
+describe('DELETE /api/kite', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('returns 200 and clears the key', async () => {
+    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    });
+    const req = makeReq('DELETE');
+    const res = mockRes();
+    await kiteHandler(req, res);
+    expect(res._status).toBe(200);
+    expect((res._data as any).success).toBe(true);
   });
 
-  it('returns 405 for non-POST method', async () => {
-    const req = makeReq('GET');
+  it('returns 500 when Supabase errors', async () => {
+    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: { message: 'db error' } }),
+        }),
+      }),
+    });
+    const req = makeReq('DELETE');
     const res = mockRes();
-    await publishHandler(req, res);
-    expect(res._status).toBe(405);
+    await kiteHandler(req, res);
+    expect(res._status).toBe(500);
   });
 });

@@ -2,16 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../_auth.js';
 
 /**
- * /api/profile — GET (read) / PATCH (update own profile) / DELETE (delete account)
- *
- * GET    — returns the user profile
- * PATCH  — updates full_name and paper_trading fields
- * DELETE — deletes the auth user + cascades to user_profiles via FK
+ * /api/profile - GET (read) / PATCH (update) / POST (change password) / DELETE (delete account)
  */
 
-/* ------------------------------------------------------------------ */
-/* Helpers                                                              */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 const PAPER_FIELDS = [
   'paper_trading_enabled',
@@ -51,9 +47,9 @@ function sanitizePatch(body: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-/* ------------------------------------------------------------------ */
-/* GET                                                                  */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// GET
+// ---------------------------------------------------------------------------
 
 async function handleGet(req: VercelRequest, res: VercelResponse): Promise<void> {
   const { user } = await requireAuth(req);
@@ -69,35 +65,35 @@ async function handleGet(req: VercelRequest, res: VercelResponse): Promise<void>
 
   if (error) {
     console.error('[profile GET] error:', error);
-    return res.status(500).json({ error: 'Failed to load profile' });
+    return void res.status(500).json({ error: 'Failed to load profile' });
   }
   if (!data) {
-    return res.status(404).json({ error: 'Profile not found' });
+    return void res.status(404).json({ error: 'Profile not found' });
   }
 
-  return res.status(200).json(data);
+  return void res.status(200).json(data);
 }
 
-/* ------------------------------------------------------------------ */
-/* PATCH                                                                */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// PATCH
+// ---------------------------------------------------------------------------
 
 async function handlePatch(req: VercelRequest, res: VercelResponse): Promise<void> {
   const { user } = await requireAuth(req);
   const body = req.body as Record<string, unknown>;
 
   if (!body || typeof body !== 'object') {
-    return res.status(400).json({ error: 'Request body must be a JSON object' });
+    return void res.status(400).json({ error: 'Request body must be a JSON object' });
   }
 
   let sanitized: Record<string, unknown>;
   try {
     sanitized = sanitizePatch(body);
   } catch (err) {
-    return res.status(400).json({ error: (err as Error).message });
+    return void res.status(400).json({ error: (err as Error).message });
   }
   if (Object.keys(sanitized).length === 0) {
-    return res.status(400).json({ error: 'No allowed fields to update' });
+    return void res.status(400).json({ error: 'No allowed fields to update' });
   }
   sanitized.updated_at = new Date().toISOString();
 
@@ -113,15 +109,70 @@ async function handlePatch(req: VercelRequest, res: VercelResponse): Promise<voi
 
   if (error) {
     console.error('[profile PATCH] error:', error);
-    return res.status(500).json({ error: 'Failed to update profile' });
+    return void res.status(500).json({ error: 'Failed to update profile' });
   }
 
-  return res.status(200).json(data);
+  return void res.status(200).json(data);
 }
 
-/* ------------------------------------------------------------------ */
-/* DELETE — delete account                                             */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// POST - change password
+// ---------------------------------------------------------------------------
+
+async function handlePost(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const { user } = await requireAuth(req);
+  const body = req.body as Record<string, unknown>;
+
+  if (!body || typeof body !== 'object') {
+    return void res.status(400).json({ error: 'Request body must be a JSON object' });
+  }
+
+  // Accept both camelCase (new) and snake_case (legacy frontend)
+  const rawCurrent = (body['currentPassword'] ?? body['current_password']) as string | undefined;
+  const rawNew = (body['newPassword'] ?? body['new_password']) as string | undefined;
+
+  if (!rawCurrent) {
+    return void res.status(400).json({ error: 'Current password is required.' });
+  }
+  if (!rawNew) {
+    return void res.status(400).json({ error: 'New password is required.' });
+  }
+  if (rawNew.length < 8) {
+    return void res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+  if (rawNew.length > 72) {
+    return void res.status(400).json({ error: 'New password must have fewer than 72 characters.' });
+  }
+  if (rawCurrent === rawNew) {
+    return void res.status(400).json({ error: 'New password must be different from current password.' });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  // Verify current password by attempting to sign in
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email ?? '',
+    password: rawCurrent,
+  });
+  if (signInError) {
+    return void res.status(400).json({ error: 'Current password is incorrect.' });
+  }
+
+  // Update to the new password
+  const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+    password: rawNew,
+  });
+  if (updateError) {
+    console.error('[profile POST] password update error:', updateError);
+    return void res.status(500).json({ error: 'Failed to update password.' });
+  }
+
+  return void res.status(200).json({ success: true, message: 'Password updated.' });
+}
+
+// ---------------------------------------------------------------------------
+// DELETE - delete account
+// ---------------------------------------------------------------------------
 
 async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<void> {
   const { user } = await requireAuth(req);
@@ -131,34 +182,35 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
 
   if (deleteAuthError) {
     console.error('[profile DELETE] auth delete error:', deleteAuthError);
-    // 404 = already deleted — treat as success
+    // 404 = already deleted - treat as success
     if (deleteAuthError.message.includes('not found')) {
-      return res.status(200).json({ success: true, message: 'Account already deleted.' });
+      return void res.status(200).json({ success: true, message: 'Account already deleted.' });
     }
-    return res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+    return void res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
   }
 
-  return res.status(200).json({ success: true, message: 'Account deleted.' });
+  return void res.status(200).json({ success: true, message: 'Account deleted.' });
 }
 
-/* ------------------------------------------------------------------ */
-/* Handler                                                              */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     switch (req.method) {
       case 'GET':    return handleGet(req, res);
       case 'PATCH':  return handlePatch(req, res);
+      case 'POST':   return handlePost(req, res);
       case 'DELETE': return handleDelete(req, res);
       default:
-        return res.status(405).json({ error: 'Method not allowed' });
+        return void res.status(405).json({ error: 'Method not allowed' });
     }
   } catch (err) {
     console.error('[profile] unexpected error:', err);
     if (err instanceof UnauthorizedError) {
-      return res.status(401).json({ error: err.message });
+      return void res.status(401).json({ error: err.message });
     }
-    return res.status(500).json({ error: 'Internal server error' });
+    return void res.status(500).json({ error: 'Internal server error' });
   }
 }

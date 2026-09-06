@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Tests for /api/profile/change-password — verifies password change flow.
+ * Tests for POST /api/profile (password change) — verifies password change flow.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { VercelRequest } from '@vercel/node';
@@ -11,7 +11,8 @@ vi.mock('../_auth', () => ({
   getSupabaseAdmin: vi.fn(),
 }));
 
-import changePasswordHandler from '../profile/change-password';
+// Import the consolidated profile handler — POST is handled by handlePost
+import profileHandler from '../profile/index';
 import { getSupabaseAdmin } from '../_auth';
 
 function mockRes(): {
@@ -26,15 +27,13 @@ function mockRes(): {
   return res;
 }
 
-function makeReq(method: string, body?: unknown): VercelRequest {
-  return { method, body: body as VercelRequest['body'], headers: {} } as unknown as VercelRequest;
+function makeReq(body?: unknown): VercelRequest {
+  return { method: 'POST', body: body as VercelRequest['body'], headers: {} } as unknown as VercelRequest;
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+beforeEach(() => { vi.clearAllMocks(); });
 
-describe('POST /api/profile/change-password', () => {
+describe('POST /api/profile (password change)', () => {
   it('returns 200 when password is changed successfully', async () => {
     (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
       auth: {
@@ -45,41 +44,58 @@ describe('POST /api/profile/change-password', () => {
       },
     });
 
-    const req = makeReq('POST', { currentPassword: 'oldpass', newPassword: 'newpass123' });
+    const req = makeReq({ currentPassword: 'oldpass', newPassword: 'newpass123' });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
+    expect(res._status).toBe(200);
+    expect((res._data as any).success).toBe(true);
+  });
+
+  it('returns 200 with snake_case field names (legacy frontend)', async () => {
+    (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue({
+      auth: {
+        signInWithPassword: vi.fn().mockResolvedValue({ user: {}, error: null }),
+        admin: {
+          updateUserById: vi.fn().mockResolvedValue({ user: {}, error: null }),
+        },
+      },
+    });
+
+    const req = makeReq({ current_password: 'oldpass', new_password: 'newpass123' });
+    const res = mockRes();
+    await profileHandler(req, res);
     expect(res._status).toBe(200);
     expect((res._data as any).success).toBe(true);
   });
 
   it('returns 400 when currentPassword is missing', async () => {
-    const req = makeReq('POST', { newPassword: 'newpass123' });
+    const req = makeReq({ newPassword: 'newpass123' });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
     expect(res._status).toBe(400);
     expect((res._data as any).error).toContain('Current password');
   });
 
   it('returns 400 when newPassword is too short', async () => {
-    const req = makeReq('POST', { currentPassword: 'oldpass', newPassword: 'x' });
+    const req = makeReq({ currentPassword: 'oldpass', newPassword: 'x' });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
     expect(res._status).toBe(400);
     expect((res._data as any).error).toContain('at least');
   });
 
   it('returns 400 when newPassword is too long', async () => {
-    const req = makeReq('POST', { currentPassword: 'oldpass', newPassword: 'x'.repeat(73) });
+    const req = makeReq({ currentPassword: 'oldpass', newPassword: 'x'.repeat(73) });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
     expect(res._status).toBe(400);
     expect((res._data as any).error).toContain('fewer');
   });
 
   it('returns 400 when newPassword equals currentPassword', async () => {
-    const req = makeReq('POST', { currentPassword: 'samepass', newPassword: 'samepass' });
+    const req = makeReq({ currentPassword: 'samepass', newPassword: 'samepass' });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
     expect(res._status).toBe(400);
     expect((res._data as any).error).toContain('different');
   });
@@ -94,9 +110,9 @@ describe('POST /api/profile/change-password', () => {
       },
     });
 
-    const req = makeReq('POST', { currentPassword: 'wrongpass', newPassword: 'newpass123' });
+    const req = makeReq({ currentPassword: 'wrongpass', newPassword: 'newpass123' });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
     expect(res._status).toBe(400);
     expect((res._data as any).error).toContain('incorrect');
   });
@@ -111,16 +127,9 @@ describe('POST /api/profile/change-password', () => {
       },
     });
 
-    const req = makeReq('POST', { currentPassword: 'oldpass', newPassword: 'newpass123' });
+    const req = makeReq({ currentPassword: 'oldpass', newPassword: 'newpass123' });
     const res = mockRes();
-    await changePasswordHandler(req, res);
+    await profileHandler(req, res);
     expect(res._status).toBe(500);
-  });
-
-  it('returns 405 for non-POST method', async () => {
-    const req = makeReq('GET');
-    const res = mockRes();
-    await changePasswordHandler(req, res);
-    expect(res._status).toBe(405);
   });
 });
