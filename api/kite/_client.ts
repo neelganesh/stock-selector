@@ -97,7 +97,6 @@ async function getUserKiteCredentials(userId: string): Promise<KiteCredentials |
     return null;
   }
 }
-}
 
 function generateChecksum(apiKey: string, requestToken: string, apiSecret: string): string {
   return crypto
