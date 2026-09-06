@@ -19,10 +19,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Whitelist of client-safe fields. Never expose Zerodha credentials.
       // Secret + access_token are server-side only; client must use the
       // /api/kite routes which read them via service role.
-      // Use maybeSingle() — returns null instead of throwing when no rows match.
-      // This avoids uncaught exceptions that crash the API with 500.
-      // Note: Zerodha credential columns may not exist in older production DBs.
-      // Only select fields that are guaranteed to exist.
       let { data, error } = await userSupabase
         .from('user_profiles')
         .select(`
@@ -53,14 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             daily_loss_limit_pct: 5,
             paper_trading_enabled: true,
             paper_trading_capital: 100000,
-            // Note: Not including zerodha columns - they may not exist in prod DB
           })
           .select()
           .single();
         
         if (createError) {
           console.error('[settings] Failed to create profile:', JSON.stringify(createError));
-          return res.status(500).json({ error: 'Failed to create profile', details: createError });
+          return res.status(500).json({ error: 'Failed to create profile', details: createError.message });
         }
         console.log('[settings] Profile created:', newProfile?.id);
         return res.status(200).json(newProfile);
@@ -73,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const updates = req.body;
 
       // Whitelist of allowed fields (prevents arbitrary overwrites)
-      // Note: zerodha_api_secret intentionally excluded - it's server-only
+      // Note: Zerodha credentials should be set via the dedicated /api/kite/credentials endpoint
       const allowedFields = [
         'total_capital',
         'risk_per_trade_pct',
@@ -84,12 +79,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'paper_trading_enabled',
         'paper_trading_capital',
         'full_name',
-        'zerodha_api_key',
-        'zerodha_api_secret',
       ];
 
-      // Field-level numeric validation. Reject clearly bad inputs to prevent
-      // a user from setting total_capital=-1 or risk_per_trade_pct=500.
+      // Field-level numeric validation
       const numericValidations: Record<string, { min?: number; max?: number }> = {
         total_capital: { min: 0, max: 1e10 },
         risk_per_trade_pct: { min: 0, max: 10 },
@@ -99,27 +91,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         daily_loss_limit_pct: { min: 0, max: 100 },
         paper_trading_capital: { min: 0, max: 1e10 },
       };
-      for (const [field, bounds] of Object.entries(numericValidations)) {
-        if (field in updates) {
-          const v = updates[field];
-          if (typeof v !== 'number' || Number.isNaN(v)) {
-            return res.status(400).json({ error: `${field} must be a number` });
+
+      // Filter and validate updates
+      const sanitized: Record<string, any> = {};
+      for (const [key, value] of Object.entries(updates)) {
+        if (!allowedFields.includes(key)) {
+          console.warn(`[settings] Ignoring disallowed field: ${key}`);
+          continue;
+        }
+
+        // Validate numeric fields
+        if (numericValidations[key]) {
+          const bounds = numericValidations[key];
+          if (typeof value !== 'number' || Number.isNaN(value)) {
+            return res.status(400).json({ error: `${key} must be a number` });
           }
-          if (bounds.min !== undefined && v < bounds.min) {
-            return res.status(400).json({ error: `${field} must be >= ${bounds.min}` });
+          if (bounds.min !== undefined && value < bounds.min) {
+            return res.status(400).json({ error: `${key} must be >= ${bounds.min}` });
           }
-          if (bounds.max !== undefined && v > bounds.max) {
-            return res.status(400).json({ error: `${field} must be <= ${bounds.max}` });
+          if (bounds.max !== undefined && value > bounds.max) {
+            return res.status(400).json({ error: `${key} must be <= ${bounds.max}` });
           }
         }
+
+        sanitized[key] = value;
       }
 
-      const sanitized: Record<string, any> = {};
-      for (const key of allowedFields) {
-        if (key in updates) {
-          sanitized[key] = updates[key];
-        }
-      }
       sanitized.updated_at = new Date().toISOString();
 
       const { data, error } = await userSupabase
@@ -129,7 +126,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .select()
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[settings] Profile update error:', JSON.stringify(error));
+        return res.status(500).json({ error: 'Failed to update profile', details: error.message });
+      }
+
       return res.status(200).json(data);
     }
 
@@ -159,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error: any) {
-    console.error('Settings API error:', error);
+    console.error('[settings] Unexpected error:', error);
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }
