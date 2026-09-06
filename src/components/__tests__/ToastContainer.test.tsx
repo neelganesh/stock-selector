@@ -62,10 +62,10 @@ describe('ToastContainer', () => {
     expect(onDismiss).toHaveBeenCalledWith('a');
   });
 
-  it('exposes data-position="top-right" on desktop (default)', () => {
+  it('exposes data-position="bottom-left" on desktop (default)', () => {
     render(<ToastContainer toasts={[makeToast()]} onDismiss={() => {}} />);
     const stack = screen.getByTestId('toast-stack');
-    expect(stack.getAttribute('data-position')).toBe('top-right');
+    expect(stack.getAttribute('data-position')).toBe('bottom-left');
   });
 
   it('exposes data-position="bottom-center" when isMobile=true', () => {
@@ -97,11 +97,11 @@ describe('ToastContainer', () => {
     expect(ids).toEqual(['toast-t7', 'toast-t6', 'toast-t5', 'toast-t4', 'toast-t3']);
   });
 
-  it('positioned at top-right by default (outer wrapper CSS classes)', () => {
+  it('positioned at bottom-left by default (outer wrapper CSS classes)', () => {
     const { container } = render(<ToastContainer toasts={[makeToast()]} onDismiss={() => {}} />);
     const outer = container.firstChild as HTMLElement;
-    expect(outer.className).toMatch(/top-4/);
-    expect(outer.className).toMatch(/right-4/);
+    expect(outer.className).toMatch(/bottom-4/);
+    expect(outer.className).toMatch(/left-4/);
   });
 
   it('positioned at bottom-center when mobile (outer wrapper CSS classes)', () => {
@@ -109,7 +109,7 @@ describe('ToastContainer', () => {
       <ToastContainer toasts={[makeToast()]} onDismiss={() => {}} isMobile={true} />
     );
     const outer = container.firstChild as HTMLElement;
-    expect(outer.className).toMatch(/bottom-4/);
+    expect(outer.className).toMatch(/bottom-20/);
     expect(outer.className).toMatch(/inset-x-4/);
   });
 });

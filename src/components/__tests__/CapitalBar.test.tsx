@@ -20,7 +20,7 @@ describe('CapitalBar wiring (auth vs broker)', () => {
 
   it('shows the "sign in" placeholder when isLoggedIn is false', () => {
     render(<CapitalBar isLoggedIn={false} />);
-    expect(screen.getByText(/sign in to view/i)).toBeTruthy();
+    expect(screen.getByText(/sign in for capital/i)).toBeTruthy();
   });
 
   it('does NOT show the "sign in" placeholder when isLoggedIn is true (signed in, no Kite)', () => {

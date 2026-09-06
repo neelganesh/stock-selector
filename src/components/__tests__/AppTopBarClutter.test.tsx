@@ -96,10 +96,10 @@ describe('App.tsx top bar de-clutter', () => {
     expect(screen.queryByRole('button', { name: /connect zerodha/i })).toBeNull();
   });
 
-  it('shows "Connect Zerodha" pill when not connected to Kite (yfinance fallback)', async () => {
+  it('shows "Sign in" button when not connected to Kite (yfinance fallback)', async () => {
     mockStrategyState.activeDataSource = 'yfinance (Fallback)';
     render(<App />);
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(screen.getByRole('button', { name: /connect zerodha/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeTruthy();
   });
 });
