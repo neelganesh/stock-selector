@@ -48,9 +48,12 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
       return;
     }
 
+    // Wait for session to be available (auth state might still be restoring)
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
-      setError('Please log in');
+      // Session not ready yet - just show loading, don't error
+      setIsLoading(true);
+      setError(null);
       return;
     }
 
@@ -62,7 +65,7 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
       setCapitalData(data);
     } catch (err) {
       if (err instanceof APIError && (err.code === 'AUTH_FAILED' || err.status === 401)) {
-        setError('Please log in');
+        setError('Session expired - please refresh');
       } else {
         setError('Failed to load');
       }
@@ -71,10 +74,26 @@ export function CapitalBar({ isLoggedIn, isPaperMode = false }: CapitalBarProps)
     }
   }, [isLoggedIn]);
 
+  // Initial fetch with small delay to ensure auth session is ready
   useEffect(() => {
-    fetchCapitalData();
+    const timer = setTimeout(fetchCapitalData, 100);
+    return () => clearTimeout(timer);
   }, [fetchCapitalData]);
 
+  // Refetch on auth state change (session restored)
+  useEffect(() => {
+    if (!supabase || !isLoggedIn) return;
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        fetchCapitalData();
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [isLoggedIn, fetchCapitalData]);
+
+  // Periodic refresh every 30 seconds
   useEffect(() => {
     if (!isLoggedIn) return;
     const interval = setInterval(fetchCapitalData, 30000);

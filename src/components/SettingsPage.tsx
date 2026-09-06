@@ -95,7 +95,9 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   };
 
   useEffect(() => {
-    fetchSettings();
+    // Small delay to ensure auth session is fully restored
+    const timer = setTimeout(fetchSettings, 100);
+    return () => clearTimeout(timer);
   }, [isLoggedIn]);
 
   const handleSave = async () => {
