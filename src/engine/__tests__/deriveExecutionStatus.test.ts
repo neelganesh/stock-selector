@@ -24,18 +24,18 @@ describe('deriveExecutionStatus', () => {
     expect(result.transitioned).toBe(false);
   });
 
-  it('keeps pending_entry when no entry fill is observed', () => {
-    const exec: ExecutionForDerivation = { ...baseExecution, status: 'pending_entry' };
+  it('keeps entry_placed when no entry fill is observed', () => {
+    const exec: ExecutionForDerivation = { ...baseExecution, status: 'entry_placed' };
     const orders: KiteOrderForDerivation[] = [
       { order_id: 'o1', transaction_type: 'BUY', status: 'OPEN', tradingsymbol: 'RELIANCE' },
     ];
     const result = deriveExecutionStatus(exec, orders);
-    expect(result.nextStatus).toBe('pending_entry');
+    expect(result.nextStatus).toBe('entry_placed');
     expect(result.transitioned).toBe(false);
   });
 
-  it('transitions pending_entry → entry_filled when BUY order is COMPLETE', () => {
-    const exec: ExecutionForDerivation = { ...baseExecution, status: 'pending_entry' };
+  it('transitions entry_placed → entry_filled when BUY order is COMPLETE', () => {
+    const exec: ExecutionForDerivation = { ...baseExecution, status: 'entry_placed' };
     const orders: KiteOrderForDerivation[] = [
       {
         order_id: 'o1',

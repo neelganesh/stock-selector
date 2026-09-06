@@ -52,7 +52,7 @@ describe('reconcileExecutions', () => {
   });
 
   it('detects missing_in_kite discrepancy when local execution has entry_order_id but Kite has no matching order', () => {
-    const execs = [makeExec({ entry_order_id: 'o-missing', status: 'pending_entry' })];
+    const execs = [makeExec({ entry_order_id: 'o-missing', status: 'entry_placed' })];
     const orders: KiteOrderForReconciliation[] = [];
     const result = reconcileExecutions(execs, orders);
     expect(result.discrepancies).toHaveLength(1);
@@ -60,8 +60,8 @@ describe('reconcileExecutions', () => {
     expect(result.discrepancies[0].symbol).toBe('RELIANCE');
   });
 
-  it('flags status_mismatch when Kite shows BUY COMPLETE but local is still pending_entry', () => {
-    const execs = [makeExec({ status: 'pending_entry', entry_order_id: 'o1' })];
+  it('flags status_mismatch when Kite shows BUY COMPLETE but local is still entry_placed', () => {
+    const execs = [makeExec({ status: 'entry_placed', entry_order_id: 'o1' })];
     const orders = [makeOrder({ status: 'COMPLETE' })];
     const result = reconcileExecutions(execs, orders);
     const mismatches = result.discrepancies.filter((d) => d.type === 'status_mismatch');
@@ -69,12 +69,12 @@ describe('reconcileExecutions', () => {
     expect(mismatches[0].severity).toBe('warning');
   });
 
-  it('returns a pending transition for pending_entry → entry_filled on BUY COMPLETE', () => {
-    const execs = [makeExec({ status: 'pending_entry', entry_order_id: 'o1' })];
+  it('returns a pending transition for entry_placed → entry_filled on BUY COMPLETE', () => {
+    const execs = [makeExec({ status: 'entry_placed', entry_order_id: 'o1' })];
     const orders = [makeOrder({ status: 'COMPLETE' })];
     const result = reconcileExecutions(execs, orders);
     expect(result.transitions).toHaveLength(1);
-    expect(result.transitions[0].fromStatus).toBe('pending_entry');
+    expect(result.transitions[0].fromStatus).toBe('entry_placed');
     expect(result.transitions[0].toStatus).toBe('entry_filled');
     expect(result.transitions[0].executionId).toBe('exec-1');
   });
@@ -126,7 +126,7 @@ describe('applyStatusTransitions', () => {
     const transitions = [
       {
         executionId: 'exec-1',
-        fromStatus: 'pending_entry',
+        fromStatus: 'entry_placed',
         toStatus: 'entry_filled',
         patch: { status: 'entry_filled', entry_filled_price: 2510 },
         realizedPnl: undefined,
@@ -155,7 +155,7 @@ describe('applyStatusTransitions', () => {
     const transitions = [
       {
         executionId: 'exec-1',
-        fromStatus: 'pending_entry',
+        fromStatus: 'entry_placed',
         toStatus: 'entry_filled',
         patch: { status: 'entry_filled' },
         realizedPnl: undefined,

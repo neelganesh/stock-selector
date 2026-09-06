@@ -2,7 +2,7 @@
 // Pure functions only — no I/O, no React, no network. Easy to unit-test.
 
 export type ExecutionStatus =
-  | 'pending_entry'
+  | 'entry_placed'
   | 'entry_filled'
   | 'gtt_placed'
   | 'target1_hit'
@@ -103,8 +103,8 @@ export function deriveExecutionStatus(
   // 2. Filter orders for this symbol.
   const relevant = orders.filter((o) => o.tradingsymbol === execution.symbol);
 
-  // 3. Handle entry transition: pending_entry → entry_filled on BUY COMPLETE.
-  if (execution.status === 'pending_entry') {
+  // 3. Handle entry transition: entry_placed → entry_filled on BUY COMPLETE.
+  if (execution.status === 'entry_placed') {
     const buy = relevant.find((o) => o.transaction_type === 'BUY' && isComplete(o.status));
     if (buy && buy.average_price != null && (buy.filled_quantity ?? 0) > 0) {
       const entryPrice = buy.average_price;

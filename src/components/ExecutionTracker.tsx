@@ -19,7 +19,7 @@ interface Execution {
   product: string;
   risk_amount: number;
   risk_pct: number;
-  capital_allocated: number;
+  // capital_allocated is computed client-side: entry_price * quantity
   charges_estimate: any;
   status: string;
   entry_filled_price: number | null;
@@ -110,7 +110,8 @@ export function ExecutionTracker({ isLoggedIn, isPaperOnly = false }: ExecutionT
         authFetchJSON<any[]>('/api/paper-positions'),
       ]);
 
-      const executions: Execution[] = liveExecutions.map(e => ({ ...e, capital_allocated: e.entry_price * e.quantity }));
+      // capital_allocated is derived: entry_price * quantity (no DB column needed)
+      const executions: Execution[] = liveExecutions;
       for (const p of paperPositions) {
         executions.push({
           id: `paper_${p.id}`,
@@ -126,7 +127,7 @@ export function ExecutionTracker({ isLoggedIn, isPaperOnly = false }: ExecutionT
           product: 'CNC',
           risk_amount: p.risk_amount,
           risk_pct: p.risk_pct,
-          capital_allocated: p.entry_price * p.quantity,
+          // capital_allocated derived: entry_price * quantity
           charges_estimate: p.charges_estimate,
           status: p.status,
           entry_filled_price: p.entry_filled_price,
@@ -406,7 +407,7 @@ export function ExecutionTracker({ isLoggedIn, isPaperOnly = false }: ExecutionT
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-900">
-                        {formatCurrency(execution.capital_allocated)}
+                        {formatCurrency(execution.entry_price * execution.quantity)}
                       </p>
                       <p className="text-[10px] text-slate-400">Capital</p>
                     </div>

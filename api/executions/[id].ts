@@ -56,14 +56,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (error) throw error;
 
       // If status changed to filled/exited, add cash flow
+      // Note: Schema column is 'type' (NOT 'flow_type')
       if (updates.status === 'entry_filled' && updates.entry_filled_price) {
         await userSupabase.from('trade_cash_flows').insert({
           execution_id: id,
           user_id: user.id,
-          flow_type: 'entry',
+          type: 'entry', // FIX: was 'flow_type' - column name is 'type'
           amount: -(updates.quantity * updates.entry_filled_price),
+          date: new Date().toISOString(),
           description: `Entry filled: ${updates.quantity} ${updates.symbol} @ ${updates.entry_filled_price}`,
-          metadata: { quantity: updates.quantity, price: updates.entry_filled_price },
         });
       }
 
@@ -72,18 +73,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await userSupabase.from('trade_cash_flows').insert({
           execution_id: id,
           user_id: user.id,
-          flow_type: 'exit',
+          type: 'exit', // FIX: was 'flow_type'
           amount: updates.quantity * updates.exit_filled_price,
+          date: new Date().toISOString(),
           description: `Exit: ${updates.quantity} ${updates.symbol} @ ${updates.exit_filled_price}`,
-          metadata: { quantity: updates.quantity, price: updates.exit_filled_price, pnl },
         });
         await userSupabase.from('trade_cash_flows').insert({
           execution_id: id,
           user_id: user.id,
-          flow_type: 'charge',
+          type: 'charge', // FIX: was 'flow_type'
           amount: -(updates.total_charges || 0),
+          date: new Date().toISOString(),
           description: `Charges for ${updates.symbol}`,
-          metadata: { charges: updates.total_charges },
         });
       }
 

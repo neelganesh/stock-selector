@@ -132,7 +132,7 @@ export function reconcileExecutions(
         // The order is gone from Kite — flag discrepancy but don't auto-transition
         discrepancies.push({
           type: 'missing_in_kite',
-          severity: exec.status === 'pending_entry' ? 'critical' : 'warning',
+          severity: exec.status === 'entry_placed' ? 'critical' : 'warning',
           symbol,
           order_id: exec.entry_order_id,
           execution_id: exec.id,
@@ -171,11 +171,11 @@ export function reconcileExecutions(
           }
         }
 
-        // Status mismatch: Kite shows BUY COMPLETE but local is still pending_entry
+        // Status mismatch: Kite shows BUY COMPLETE but local is still entry_placed
         if (
           ko.status === 'COMPLETE' &&
           ko.transaction_type === 'BUY' &&
-          exec.status === 'pending_entry'
+          exec.status === 'entry_placed'
         ) {
           discrepancies.push({
             type: 'status_mismatch',
