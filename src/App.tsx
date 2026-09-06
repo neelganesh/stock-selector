@@ -416,7 +416,8 @@ function DashboardContent() {
         }}
       >
         {/* Top row: brand + nav + account */}
-        <div className="flex items-center h-12 px-3 gap-3">
+        {/* pl-[52px] on mobile accounts for fixed hamburger button (w-10 + left-3 spacing) */}
+        <div className="flex items-center h-12 px-3 gap-3 lg:pl-0">
           {/* Brand — icon-only on mobile (left of header, after hamburger), full brand on desktop */}
           <div className="flex items-center shrink-0" style={{ gap: '0.5rem' }}>
             {/* Logo icon — always visible, positioned after hamburger's fixed space */}
