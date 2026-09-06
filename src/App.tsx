@@ -417,10 +417,11 @@ function DashboardContent() {
       >
         {/* Top row: brand + nav + account */}
         <div className="flex items-center h-12 px-3 gap-3">
-          {/* Brand — only visible on desktop. On mobile the hamburger (fixed, top-left) handles nav. */}
-          <div className="hidden lg:flex items-center shrink-0" style={{ gap: '0.5rem' }}>
+          {/* Brand — icon-only on mobile (left of header, after hamburger), full brand on desktop */}
+          <div className="flex items-center shrink-0" style={{ gap: '0.5rem' }}>
+            {/* Logo icon — always visible, positioned after hamburger's fixed space */}
             <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               style={{ backgroundColor: 'var(--accent-brand)' }}
             >
               <svg
@@ -437,7 +438,8 @@ function DashboardContent() {
                 <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
-            <span className="font-semibold" style={{ color: 'var(--text-primary)', fontSize: '14px' }}>
+            {/* Brand name — desktop only */}
+            <span className="hidden lg:block font-semibold" style={{ color: 'var(--text-primary)', fontSize: '14px' }}>
               Quant Vision
             </span>
           </div>
