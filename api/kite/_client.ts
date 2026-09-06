@@ -46,6 +46,11 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey, {
   }
 });
 
+// Export for use by other API routes
+export function getSupabaseAdmin() {
+  return supabaseAdmin;
+}
+
 interface KiteCredentials {
   apiKey: string;
   apiSecret: string;

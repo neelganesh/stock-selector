@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireAuth, UnauthorizedError } from '../kite/_client.js';
+import { requireAuth, UnauthorizedError, getSupabaseAdmin } from '../kite/_client.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let auth;
@@ -12,7 +12,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     throw err;
   }
 
-  const { user, supabase: userSupabase } = auth;
+  const { user } = auth;
+  // Use admin client directly - user ID from auth is sufficient for security
+  const supabase = getSupabaseAdmin();
 
   try {
     if (req.method === 'GET') {
@@ -21,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // /api/kite routes which read them via service role.
       console.log('[settings] GET - user:', user.id);
       
-      let { data, error } = await userSupabase
+      let { data, error } = await supabase
         .from('user_profiles')
         .select(`
           id, user_id, email, full_name, avatar_url,
@@ -38,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // If no profile exists, create one with defaults
       if (!data) {
         console.log('[settings] No profile found for user', user.id, '- creating with defaults');
-        const { data: newProfile, error: createError } = await userSupabase
+        const { data: newProfile, error: createError } = await supabase
           .from('user_profiles')
           .insert({
             user_id: user.id,
@@ -123,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       sanitized.updated_at = new Date().toISOString();
 
-      const { data, error } = await userSupabase
+      const { data, error } = await supabase
         .from('user_profiles')
         .update(sanitized)
         .eq('user_id', user.id)
@@ -140,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST' && req.body?.action === 'reset_paper_portfolio') {
       // Cancel all open paper positions
-      const { error: cancelError } = await userSupabase
+      const { error: cancelError } = await supabase
         .from('paper_positions')
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
         .eq('user_id', user.id)
@@ -149,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (cancelError) throw cancelError;
 
       // Reset paper_trading_capital to default if user didn't override
-      const { data: profile } = await userSupabase
+      const { data: profile } = await supabase
         .from('user_profiles')
         .select('paper_trading_capital')
         .eq('user_id', user.id)
