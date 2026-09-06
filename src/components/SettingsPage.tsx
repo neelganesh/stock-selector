@@ -49,6 +49,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('capital');
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -189,6 +190,30 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       const message = err?.message || 'Failed to start token generation';
       setSaveMessage({ type: 'error', text: message });
       toast.error(`Token generation failed: ${message}`);
+    }
+  };
+
+  const handleResetKite = async () => {
+    if (!confirm('Reset Kite credentials? This will clear your API key and secret. You can reconfigure anytime from Settings.')) return;
+    setIsResetting(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/kite/credentials', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to reset credentials');
+      }
+      // Refresh settings
+      setDraft(prev => prev ? { ...prev, zerodha_api_key: null, zerodha_api_secret: null } : null);
+      toast.success('Kite credentials reset. You can reconfigure anytime from Settings.');
+    } catch (err: any) {
+      toast.error(`Reset failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -351,6 +376,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
               isSaving={isSaving}
               handleGenerateToken={handleGenerateToken}
               isGeneratingToken={isGeneratingToken}
+              handleReset={handleResetKite}
+              isResetting={isResetting}
             />
           )}
           {activeSection === 'universe' && (
@@ -568,6 +595,8 @@ function KiteSettings({
   isSaving,
   handleGenerateToken,
   isGeneratingToken,
+  handleReset,
+  isResetting,
 }: {
   apiKey?: string | null;
   hasApiSecret?: boolean;
@@ -578,6 +607,8 @@ function KiteSettings({
   isSaving: boolean;
   handleGenerateToken: () => void;
   isGeneratingToken: boolean;
+  handleReset: () => void;
+  isResetting: boolean;
 }) {
   const isConfigured = !!apiKey && !!hasApiSecret;
   const isCredentialsLocked = !!hasApiSecret;
@@ -668,10 +699,13 @@ function KiteSettings({
       </button>
 
       {isCredentialsLocked && (
-        <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
-          <Icon name="info" size={14} strokeWidth={2} />
-          <span>Credentials are locked. Login again if session expires.</span>
-        </div>
+        <button
+          onClick={handleReset}
+          disabled={isResetting}
+          className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 transition-colors"
+        >
+          {isResetting ? 'Resetting...' : 'Reset'}
+        </button>
       )}
 
       <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-start gap-1.5">

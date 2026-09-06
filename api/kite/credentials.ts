@@ -70,6 +70,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // DELETE - Reset credentials
+    if (req.method === 'DELETE') {
+      const { user } = auth;
+      const supabase = getSupabaseAdmin();
+
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          zerodha_api_key: null,
+          zerodha_api_secret: null,
+          zerodha_access_token: null,
+          zerodha_access_token_expires_at: null,
+          zerodha_user_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('[credentials] Failed to reset credentials:', JSON.stringify(error));
+        return res.status(500).json({ error: 'Failed to reset credentials', details: error.message });
+      }
+
+      console.log('[credentials] Reset Kite credentials for user:', user.id);
+      return res.status(200).json({ success: true, message: 'Credentials reset successfully' });
+    }
+
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error: any) {
     console.error('[credentials] Unexpected error:', error);
