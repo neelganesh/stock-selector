@@ -169,15 +169,15 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       if (!token) throw new Error('Not signed in');
       // Persist the credentials to the backend first so the OAuth callback
       // can use them to exchange the request_token for an access_token.
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
+      const res = await fetch('/api/kite/credentials', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          zerodha_api_key: draft.zerodha_api_key.trim(),
-          zerodha_api_secret: draft.zerodha_api_secret.trim(),
+          api_key: draft.zerodha_api_key.trim(),
+          api_secret: draft.zerodha_api_secret.trim(),
         }),
       });
       if (!res.ok) {
