@@ -1,4 +1,3 @@
-import { Variants } from 'framer-motion';
 
 // Spring configurations based on Apple Vision OS principles
 export const springConfig = {

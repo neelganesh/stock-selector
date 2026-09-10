@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { pageTransition } from '../lib/motion';
 import { Sidebar } from './Sidebar';
 import { MobileViewTabs } from './MobileViewTabs';
 import { MobileSidebarDrawer } from './MobileSidebarDrawer';
@@ -37,7 +35,7 @@ export function AppShell({ children, className }: AppShellProps) {
   const showTabs = isMobile && pathname !== '/auth'; // Hide tabs on auth pages
 
   return (
-    <motion.div {...pageTransition} className={`flex min-h-screen flex-col ${className}`}>
+    <div className={`flex min-h-screen flex-col ${className}`}>
       {/* Always render the main content area */}
       <main className="flex-1 overflow-hidden">
         {/* Desktop layout: Sidebar + Main Content */}
@@ -68,6 +66,6 @@ export function AppShell({ children, className }: AppShellProps) {
           className="fixed left-0 top-[var(--topbar-h)] h-[calc(100vh-var(--topbar-h))] w-[220px] border-r border-border-default"
         />
       )}
-    </motion.div>
+    </div>
   );
 }
