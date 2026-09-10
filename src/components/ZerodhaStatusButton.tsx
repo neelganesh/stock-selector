@@ -34,7 +34,7 @@ export function ZerodhaStatusButton({ onNavigateToProfile }: ZerodhaStatusButton
         return;
       }
 
-      const res = await fetch('/api/kite/key-status', {
+      const res = await fetch('/api/kite', {
         headers: { Authorization: `Bearer ${token}` },
       });
 

@@ -93,6 +93,22 @@ async function handlePost(req: VercelRequest, res: VercelResponse): Promise<void
     return void res.status(200).json(ticket);
   }
 
+  // ?reveal=true returns the full API key for temporary display (security conscious)
+  if (req.query?.reveal === 'true' || req.query?.reveal === true) {
+    const encrypted = await getEncryptedKey(user.id);
+    if (!encrypted) {
+      return void res.status(400).json({ error: 'No Kite API key configured. Save a key first.' });
+    }
+    let apiKey: string;
+    try {
+      apiKey = decrypt(encrypted);
+    } catch {
+      return void res.status(400).json({ error: 'Stored key could not be decrypted. Please re-enter your API key.' });
+    }
+    // Return full key - caller should handle securely (temporary display only)
+    return void res.status(200).json({ apiKey });
+  }
+
   // Default: save/encrypt the key
   const { api_key } = req.body ?? {};
   if (!api_key || typeof api_key !== 'string' || api_key.trim().length === 0) {

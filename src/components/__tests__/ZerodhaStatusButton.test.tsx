@@ -1,5 +1,5 @@
 /**
- * Tests for ZerodhaStatusButton — polls GET /api/kite/key-status to show Kite config state.
+ * Tests for ZerodhaStatusButton — polls GET /api/kite to show Kite config state.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
@@ -26,7 +26,7 @@ vi.mock('../../lib/supabase', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// fetch mock (used to call /api/kite/key-status)
+// fetch mock (used to call /api/kite)
 // ---------------------------------------------------------------------------
 const fetchMock = vi.fn();
 beforeEach(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './GlassCard';
 import { Icon, type IconName } from './Icon';
@@ -55,6 +55,12 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const [isLoadingKeyStatus, setIsLoadingKeyStatus] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
+  // Key reveal functionality
+  const [isRevealingKey, setIsRevealingKey] = useState(false);
+  const [revealedKey, setRevealedKey] = useState<string>('');
+  const [isCopyingKey, setIsCopyingKey] = useState(false);
+  const [revealTimeout, setRevealTimeout] = useState<NodeJS.Timeout | null>(null);
+
   // Theme — persisted by useTheme
   const { theme: themeMode, setTheme: setThemeMode, resolvedTheme } = useTheme();
 
@@ -91,17 +97,29 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const fetchKeyStatus = useCallback(async () => {
     try {
       const token = await getAccessToken();
-      if (!token) return;
+      if (!token) {
+        setSavedApiKey(null);
+        return;
+      }
       setIsLoadingKeyStatus(true);
-      const res = await fetch('/api/kite/key-status', {
+      const res = await fetch('/api/kite', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setKeyStatus({ configured: data.configured ?? false, working: data.working ?? false });
+      if (!res.ok) {
+        setSavedApiKey(null);
+        return;
+      }
+      const data = await res.json();
+      if (data.configured) {
+        setSavedApiKey(data.maskedKey);
+        setKeyStatus({ configured: true, working: data.working ?? false });
+      } else {
+        setSavedApiKey(null);
+        setKeyStatus({ configured: false, working: false });
       }
     } catch {
-      // non-critical
+      setSavedApiKey(null);
+      setKeyStatus({ configured: false, working: false });
     } finally {
       setIsLoadingKeyStatus(false);
     }
@@ -125,6 +143,78 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       fetchKeyStatus();
     }
   }, [activeSection, fetchKeyStatus]);
+
+  // Key reveal handlers
+  const handleRevealKey = useCallback(async () => {
+    if (!savedApiKey) return;
+
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
+
+      const res = await fetch(`/api/kite?reveal=true`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to reveal API key');
+      }
+
+      const data = await res.json();
+      setRevealedKey(data.apiKey);
+      setIsRevealingKey(true);
+
+      // Auto-hide after 30 seconds or on blur
+      if (revealTimeout.current) {
+        clearTimeout(revealTimeout.current);
+      }
+      const timeout = setTimeout(() => {
+        setIsRevealingKey(false);
+        setRevealedKey('');
+      }, 30000);
+      setRevealTimeout(timeout);
+
+    } catch (err: any) {
+      toast.error(`Failed to reveal API key: ${err?.message || 'network error'}`);
+    } finally {
+      // Hide the input field while revealing
+      setShowApiKey(false);
+    }
+  }, [getAccessToken, savedApiKey, toast]);
+
+  const handleCopyKey = useCallback(async () => {
+    if (!revealedKey) return;
+
+    setIsCopyingKey(true);
+    try {
+      await navigator.clipboard.writeText(revealedKey);
+      toast.success('API key copied to clipboard');
+    } catch (err) {
+      toast.error('Failed to copy API key');
+    } finally {
+      setIsCopyingKey(false);
+
+      // Auto-hide after copy
+      if (revealTimeout.current) {
+        clearTimeout(revealTimeout.current);
+      }
+      setIsRevealingKey(false);
+      setRevealedKey('');
+    }
+  }, [revealedKey, toast]);
+
+  const handleApiKeyBlur = useCallback(() => {
+    // Auto-hide revealed key on blur
+    if (revealTimeout.current) {
+      clearTimeout(revealTimeout.current);
+    }
+    setIsRevealingKey(false);
+    setRevealedKey('');
+  }, []);
 
   const handleSave = async () => {
     if (!draft || !user) return;
@@ -630,11 +720,39 @@ function ProfileSettings({
         </div>
 
         {savedApiKey ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between p-3 rounded-lg bg-[color:var(--ground-secondary)] border border-[color:var(--border-default)]">
               <div>
                 <p className="text-xs font-bold text-[color:var(--text-primary)]">Saved API Key</p>
-                <p className="text-sm font-mono text-[color:var(--text-secondary)]">{savedApiKey}</p>
+                {/* Reveal/hide functionality with temporary reveal and copy */}
+                <div className="flex items-center gap-2">
+                  {!isRevealingKey ? (
+                    <button
+                      onClick={handleRevealKey}
+                      disabled={isRevealingKey || isSavingKey || isDeletingKey}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] transition-colors"
+                    >
+                      Show
+                    </button>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={revealedKey}
+                        readOnly
+                        className="flex-1 px-3 py-2 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--elevated-1)] text-sm font-mono text-[color:var(--text-primary)]"
+                        onBlur={handleApiKeyBlur}
+                      />
+                      <button
+                        onClick={handleCopyKey}
+                        disabled={isCopyingKey}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-[color:var(--accent)] hover:opacity-90 disabled:opacity-50 transition-colors"
+                      >
+                        {isCopyingKey ? 'Copied!' : 'Copy'}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <button
                 onClick={onDeleteApiKey}
@@ -645,32 +763,35 @@ function ProfileSettings({
               </button>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <span className={keyStatus.configured ? 'w-2 h-2 rounded-full bg-[color:var(--positive)]' : 'w-2 h-2 rounded-full bg-[color:var(--text-tertiary)]'} />
-                <span className="text-xs text-[color:var(--text-secondary)]">
-                  {isLoadingKeyStatus ? 'Checking...' : keyStatus.configured ? 'Configured' : 'Not configured'}
-                </span>
-              </div>
-              {keyStatus.configured && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
-                  <span className={keyStatus.working ? 'w-2 h-2 rounded-full bg-[color:var(--positive)]' : 'w-2 h-2 rounded-full bg-[color:var(--warning-amber)]'} />
+                  <span className={keyStatus.configured ? 'w-2 h-2 rounded-full bg-[color:var(--positive)]' : 'w-2 h-2 rounded-full bg-[color:var(--text-tertiary)]'} />
                   <span className="text-xs text-[color:var(--text-secondary)]">
-                    {keyStatus.working ? 'Working' : 'Not working'}
+                    {isLoadingKeyStatus ? 'Checking...' : keyStatus.configured ? 'Configured' : 'Not configured'}
                   </span>
                 </div>
-              )}
+                {keyStatus.configured && (
+                  <div className="flex items-center gap-1.5">
+                    <span className={keyStatus.working ? 'w-2 h-2 rounded-full bg-[color:var(--positive)]' : 'w-2 h-2 rounded-full bg-[color:var(--warning-amber)]'} />
+                    <span className="text-xs text-[color:var(--text-secondary)]">
+                      {keyStatus.working ? 'Working' : 'Not working'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="relative">
               <input
-                type={showApiKey ? 'text' : 'password'}
+                type="password"
                 value={apiKeyInput}
                 onChange={e => setApiKeyInput(e.target.value)}
                 placeholder="Enter your Kite API key"
                 className="w-full px-3 py-2 pr-10 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--elevated-1)] text-sm font-mono text-[color:var(--text-primary)] placeholder:text-[color:var(--text-tertiary)] focus:outline-none focus:border-[color:var(--accent)]"
+                onBlur={handleApiKeyBlur}
               />
               <button
                 type="button"
