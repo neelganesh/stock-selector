@@ -109,10 +109,19 @@ describe('fetchPublishTicket', () => {
 
     const ticket = await fetchPublishTicket();
     expect(ticket.apiKey).toBe('kite_api_key_123');
-    expect(fetchMock).toHaveBeenCalledWith('/api/kite/publish', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/kite?publish=true', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer fake-token' }),
     }));
+  });
+
+  it('throws when response payload lacks apiKey (blank-key popup guard)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ticket: 'base64blob', expiresAt: new Date().toISOString() }),
+    });
+
+    await expect(fetchPublishTicket()).rejects.toThrow(/missing API key/i);
   });
 
   it('throws with KITE_KEY_NOT_CONFIGURED code when 404', async () => {

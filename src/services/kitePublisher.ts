@@ -30,7 +30,8 @@ export interface KiteOrder {
   product?: 'CNC' | 'MIS' | 'NRML';
   price?: number;
   trigger_price?: number;
-  variety?: 'regular' | 'co' | 'amo';
+  target?: number;
+  variety?: 'regular' | 'bo' | 'co' | 'amo';
   readonly?: boolean;
 }
 
@@ -101,7 +102,7 @@ export function isPublisherReady(): boolean {
  */
 export async function fetchPublishTicket(): Promise<PublishTicket> {
   const token = await getAccessToken();
-  const res = await fetch('/api/kite/publish', {
+  const res = await fetch('/api/kite?publish=true', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -109,7 +110,7 @@ export async function fetchPublishTicket(): Promise<PublishTicket> {
     },
   });
 
-  if (res.status === 404) {
+  if (res.status === 400 || res.status === 404) {
     const body = await res.json().catch(() => ({}));
     const err = new Error(
       (body as { error?: string }).error || 'Kite API key not configured',
@@ -124,7 +125,15 @@ export async function fetchPublishTicket(): Promise<PublishTicket> {
     throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<PublishTicket>;
+  const ticket = (await res.json()) as Partial<PublishTicket>;
+  if (!ticket?.apiKey) {
+    // Backend returned an unusable ticket — never open the popup with a blank key
+    // (Kite shows "Missing or empty field api_key" for blank keys).
+    const err = new Error('Publish ticket is missing API key');
+    (err as Error & { code?: string }).code = 'KITE_TICKET_INVALID';
+    throw err;
+  }
+  return ticket as PublishTicket;
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -215,6 +224,7 @@ export async function placeOrder(order: KiteOrder): Promise<void> {
           product: order.product || 'MIS',
           ...(order.price && { price: order.price }),
           ...(order.trigger_price && { trigger_price: order.trigger_price }),
+          ...(order.target && { target: order.target }),
           ...(order.variety && { variety: order.variety }),
           ...(order.readonly !== undefined && { readonly: order.readonly }),
         });

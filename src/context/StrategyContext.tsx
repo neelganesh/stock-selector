@@ -18,6 +18,8 @@ export type SortOption =
 
 export type ResultCapFilter = 'all' | 'large' | 'mid' | 'small';
 
+const SESSION_STORAGE_PICKS_KEY = 'stock_selector_picks';
+
 interface StrategyContextType {
   strategies: StrategyDefinition[];
   activeStrategyId: string;
@@ -46,12 +48,8 @@ interface StrategyContextType {
 
   activeDataSource: DataSourceType;
   setActiveDataSource: (source: DataSourceType) => void;
-
   customScripList: string[];
   setCustomScripList: (scrips: string[]) => void;
-
-  isPaperOnly: boolean;
-  setIsPaperOnly: (v: boolean) => void;
 }
 
 const StrategyContext = createContext<StrategyContextType | null>(null);
@@ -62,7 +60,24 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
     ALL_STRATEGIES[0].id // Zerodha Swing Strategy is 1st
   );
   const [capCategory, setCapCategoryState] = useState<CapCategory>('all');
-  const [picks, setPicks] = useState<StockPick[]>([]);
+  const [picks, setPicks] = useState<StockPick[]>(() => {
+    // Hydrate picks from sessionStorage for instant refresh within session
+    // Checks 2-minute TTL — expired entries are ignored
+    try {
+      const raw = sessionStorage.getItem(SESSION_STORAGE_PICKS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const age = Date.now() - (parsed.timestamp ?? 0);
+        const ttl = parsed.ttl ?? 2 * 60 * 1000;
+        if (age < ttl && Array.isArray(parsed.picks) && parsed.picks.length > 0) {
+          return parsed.picks;
+        }
+      }
+    } catch {
+      // ignore corrupt data
+    }
+    return [];
+  });
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [progress, setProgress] = useState<ScanProgress>({
     scanned: 0,
@@ -79,9 +94,7 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
 
   const [activeDataSource, setActiveDataSource] = useState<DataSourceType>('yfinance');
   const [customScripList, setCustomScripList] = useState<string[]>([]);
-  const [isPaperOnly, setIsPaperOnlyState] = useState<boolean>(true);
 
-  const setIsPaperOnly = (val: boolean) => setIsPaperOnlyState(val);
 
   const activeStrategy = getStrategyById(activeStrategyId);
 
@@ -114,6 +127,72 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
     },
     [activeStrategyId, capCategory, customScripList]
   );
+
+  // Persist picks to sessionStorage whenever they change (enables instant refresh)
+  // Uses 2-minute TTL so cached signals expire and refresh on back-navigation
+  useEffect(() => {
+    try {
+      if (picks.length > 0) {
+        const cacheEntry = {
+          picks,
+          timestamp: Date.now(),
+          ttl: 2 * 60 * 1000, // 2 minutes in milliseconds
+        };
+        sessionStorage.setItem(SESSION_STORAGE_PICKS_KEY, JSON.stringify(cacheEntry));
+      }
+    } catch {
+      // sessionStorage may be unavailable
+    }
+  }, [picks]);
+
+  // Prefetch-on-idle: after initial signals load, prefetch next page data
+  // using requestIdleCallback (with setTimeout fallback)
+  useEffect(() => {
+    if (picks.length === 0 || isScanning) return;
+
+    let idleHandle: number | undefined;
+
+    const schedulePrefetch = () => {
+      const schedule =
+        typeof requestIdleCallback !== 'undefined'
+          ? (cb: () => void) => requestIdleCallback(cb, { timeout: 5000 }) as unknown as number
+          : (cb: () => void) => window.setTimeout(cb, 1000);
+
+      idleHandle = schedule(() => {
+        try {
+          // Pre-warm the next page of data by triggering a lightweight scan
+          // in the background. This ensures subsequent navigation is instant.
+          const nextPagePrefetch = async () => {
+            // Only prefetch if not already scanning
+            if (!document.hidden) {
+              runScan(activeStrategyId, capCategory).catch(() => {
+                // Prefetch is best-effort; ignore errors
+              });
+            }
+          };
+          nextPagePrefetch();
+        } catch {
+          // ignore prefetch errors
+        }
+      });
+    };
+
+    // Wait a brief moment after initial load before prefetching
+    const delayHandle = window.setTimeout(() => {
+      schedulePrefetch();
+    }, 3000);
+
+    return () => {
+      clearTimeout(delayHandle);
+      if (idleHandle) {
+        if (typeof cancelIdleCallback !== 'undefined') {
+          cancelIdleCallback(idleHandle);
+        } else {
+          clearTimeout(idleHandle);
+        }
+      }
+    };
+  }, [picks.length, isScanning, activeStrategyId, capCategory]);
 
   // Trigger initial scan when component mounts or strategy/cap changes
   useEffect(() => {
@@ -153,8 +232,6 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
         setActiveDataSource,
         customScripList,
         setCustomScripList,
-        isPaperOnly,
-        setIsPaperOnly,
       }}
     >
       {children}

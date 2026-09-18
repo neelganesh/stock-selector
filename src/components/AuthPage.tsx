@@ -5,7 +5,7 @@ import { useAuth } from './AuthProvider';
 export function AuthPage({ onClose }: { onClose: () => void }) {
   const { signIn, signUp, loading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
@@ -14,14 +14,25 @@ export function AuthPage({ onClose }: { onClose: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Validate username: no dots, no @ (prevents email confusion), alphanumeric + _ - only
+    if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+      setError('Username can only contain letters, numbers, hyphens, and underscores. Do not use an email address.');
+      return;
+    }
+    if (username.length < 3) {
+      setError('Username must be at least 3 characters.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       let result;
       if (isLogin) {
-        result = await signIn(email, password);
+        result = await signIn(username, password);
       } else {
-        result = await signUp(email, password, fullName);
+        result = await signUp(username, password, fullName);
       }
 
       if (result.error) {
@@ -96,7 +107,7 @@ export function AuthPage({ onClose }: { onClose: () => void }) {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Your name (optional)"
                   className="w-full px-3.5 py-2.5 rounded-xl border transition-all text-xs"
                   style={{ 
                     backgroundColor: 'var(--elevated-2)', 
@@ -108,12 +119,12 @@ export function AuthPage({ onClose }: { onClose: () => void }) {
             )}
 
             <div>
-              <label className="block font-bold mb-1 text-xs" style={{ color: 'var(--text-secondary)' }}>Email</label>
+              <label className="block font-bold mb-1 text-xs" style={{ color: 'var(--text-secondary)' }}>Username</label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="yourusername"
                 className="w-full px-3.5 py-2.5 rounded-xl border transition-all text-xs"
                 style={{ 
                   backgroundColor: 'var(--elevated-2)', 

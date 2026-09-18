@@ -93,7 +93,7 @@ export function DeleteAccountModal({
         {/* Email confirmation */}
         <div className="mb-6">
           <label className="text-xs font-bold text-[color:var(--text-primary)] block mb-1.5">
-            Type your email to confirm
+            Type your username to confirm
           </label>
           <input
             type="email"

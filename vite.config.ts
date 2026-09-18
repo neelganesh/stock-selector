@@ -27,12 +27,11 @@ export default defineConfig({
           'Accept': 'application/json, text/plain, */*',
         },
       },
-      // Catch-all: proxy every other /api/* to the production Vercel
-      // deployment (the actual serverless functions only exist there).
+      // Catch-all: proxy every other /api/* to the local Vercel dev server
       '/api': {
-        target: 'https://stock-selector-deploy.vercel.app',
+        target: 'http://localhost:3000',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

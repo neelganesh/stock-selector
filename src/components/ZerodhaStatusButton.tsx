@@ -89,7 +89,7 @@ export function ZerodhaStatusButton({ onNavigateToProfile }: ZerodhaStatusButton
             ? { scale: [1, 1.3, 1], opacity: [1, 0.6, 1] }
             : { scale: [1, 1, 1] }
         }
-        transition={{ duration: status === 'loading' ? 0 : 2, repeat: Infinity }}
+        transition={status === 'loading' ? { duration: 0 } : { duration: 2, repeat: Infinity }}
         className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`}
       />
       <span

@@ -2,12 +2,30 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../lib/supabase';
 
+/** Convert a username to a virtual email for Supabase auth.
+ *  Users type just a username; we map it to a stable virtual email
+ *  so Supabase auth works without email confirmation.
+ */
+function usernameToEmail(username: string): string {
+  const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  return `${clean}@stock-selector.local`;
+}
+
+/** Extract a display username from a user object (email or metadata). */
+function getUsername(user: any): string | null {
+  if (!user) return null;
+  if (user.user_metadata?.username) return user.user_metadata.username;
+  if (user.email) return user.email.split('@')[0];
+  return null;
+}
+
+
 interface AuthContextType {
   user: any | null;
   profile: UserProfile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
+  signIn: (username: string, password: string) => Promise<{ error: any }>;
+  signUp: (username: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   /** Returns the current Supabase access token, refreshing if needed. */
@@ -69,14 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  const signIn = async (email: string, password: string) => {
-    console.log('[Auth] signIn called with:', email);
+  const signIn = async (username: string, password: string) => {
+    console.log('[Auth] signIn called with:', username);
     if (!supabase) {
       console.error('[Auth] Supabase not configured');
       return { error: new Error('Supabase not configured') };
     }
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: usernameToEmail(username), password });
       console.log('[Auth] signInWithPassword result:', { data, error });
       return { error };
     } catch (err) {
@@ -85,16 +103,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName?: string) => {
-    console.log('[Auth] signUp called with:', email);
+  const signUp = async (username: string, password: string, fullName?: string) => {
+    console.log('[Auth] signUp called with:', username);
     if (!supabase) {
       console.error('[Auth] Supabase not configured');
       return { error: new Error('Supabase not configured') };
     }
+    const virtualEmail = usernameToEmail(username);
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: virtualEmail,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: {
+          full_name: fullName ?? null,
+          username,
+        },
+        email: virtualEmail,
+        confirm_email: false,
+      },
     });
     if (error) return { error };
 

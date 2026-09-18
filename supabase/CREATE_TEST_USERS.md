@@ -1,0 +1,41 @@
+-- Create test users without rate limits
+-- ==============================================
+-- METHOD 1: Run SQL directly in Supabase SQL Editor
+-- 
+-- 1. Go to: Supabase Dashboard → Project → SQL Editor
+-- 2. Run the SQL below:
+-- 3. Then login with username + password in the app
+--
+-- NOTE: You need to insert into auth.users using the admin key.
+-- The simplest way is via the Admin API endpoint:
+--   POST /api/admin/create-user
+-- With header: x-admin-token: YOUR_CRON_SECRET
+--
+-- METHOD 2: Use the admin endpoint from the app
+-- (After deploying the new API route)
+
+-- Example SQL for Supabase SQL Editor (using service_role key):
+-- DO $$ 
+-- DECLARE
+--   new_user_id UUID;
+-- BEGIN
+--   INSERT INTO auth.users (
+--     id, email, encrypted_password, raw_user_meta_data, raw_app_meta_data,
+--     is_super_admin, created_at, updated_at
+--   ) VALUES (
+--     gen_random_uuid(),
+--     'testuser@stock-selector.local',
+--     crypt('testpass123', gen_salt('bf')),
+--     '{"username": "testuser", "full_name": "Test User"}',
+--     '{"provider":"email","providers":["email"]}',
+--     false, now(), now()
+--   ) RETURNING id INTO new_user_id;
+--   
+--   -- Auto-create profile
+--   INSERT INTO user_profiles (user_id, email, full_name)
+--   VALUES (new_user_id, 'testuser@stock-selector.local', 'Test User')
+--   ON CONFLICT (user_id) DO NOTHING;
+--   
+--   RAISE NOTICE 'Created test user: testuser (ID: %)', new_user_id;
+-- END;
+-- $$;

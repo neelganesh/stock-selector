@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { StrategyProvider, useStrategy } from './context/StrategyContext';
+import { TierProvider } from './context/TierContext';
+import { UpgradeModal } from './components/UpgradeModal';
 import { Sidebar } from './components/Sidebar';
 import { MobileSidebarDrawer } from './components/MobileSidebarDrawer';
 import { MobileBodyClass } from './components/MobileBodyClass';
-import { StockCard } from './components/StockCard';
+import StockCard from './components/StockCard';
 import { ExpandableCard } from './components/ExpandableCard';
-import { SectorStrengthExplorer } from './components/SectorStrengthExplorer';
-import { CapitalBar } from './components/CapitalBar';
 import { ExecuteModal } from './components/ExecuteModal';
 import { ToastProvider } from './components/ToastProvider';
 import { useToast } from './components/useToast';
 import { MobileNav, type MobileNavTab } from './components/MobileNav';
 import { AuthProvider, useAuth } from './components/AuthProvider';
+import { useTier } from './context/TierContext';
 import { AuthPage } from './components/AuthPage';
 import { SettingsPage } from './components/SettingsPage';
 import { Pagination } from './components/Pagination';
@@ -27,17 +28,6 @@ import { authFetch } from './lib/authFetch';
 import { placeOrder } from './services/kitePublisher';
 import type { StockPick } from './engine/types';
 
-function ComingSoonPlaceholder({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <GlassCard variant="default" padding="lg" className="text-center mt-6">
-      <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
-        <Icon name="clock" size={32} strokeWidth={1.5} style={{ color: 'var(--text-tertiary)' }} />
-      </div>
-      <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-      <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{subtitle}</p>
-    </GlassCard>
-  );
-}
 
 const RESULTS_PER_PAGE = 12;
 
@@ -55,15 +45,13 @@ function DashboardContent() {
     resultCapFilter,
     setResultCapFilter,
     progress,
-    isPaperOnly,
-    setIsPaperOnly,
   } = useStrategy();
 
   const { user, profile, signOut } = useAuth();
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
 
-  const [activeTab, setActiveTab] = useState<'signals' | 'sector-heatmap' | 'executions' | 'analytics' | 'settings'>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'settings'>('signals');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -75,6 +63,23 @@ function DashboardContent() {
   } | null>(null);
 
   const isLoggedIn = !!user;
+
+  /** Get display name: prefers profile full_name, then user metadata username, then email prefix */
+  function getDisplayName(user: typeof user | null): string {
+    if (!user) return '';
+    if (profile?.full_name) return profile.full_name;
+    if (user.user_metadata?.username) return user.user_metadata.username;
+    if (user.email) return user.email.split('@')[0];
+    return user.id ?? '';
+  }
+
+  /** Get single initial for avatar */
+  function getUserInitial(user: typeof user | null): string | null {
+    if (!user) return null;
+    if (user.user_metadata?.username) return user.user_metadata.username[0]?.toUpperCase() ?? null;
+    if (user.email) return user.email[0]?.toUpperCase() ?? null;
+    return null;
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -92,16 +97,13 @@ function DashboardContent() {
   // never emoji, so the glyphs stay crisp at any density and inherit color.
   const mobileNavTabs: MobileNavTab[] = [
     { id: 'signals', label: 'Signals', icon: 'bolt' },
-    { id: 'sector-heatmap', label: 'Sectors', icon: 'bars' },
-    { id: 'executions', label: 'Trades', icon: 'clipboard' },
-    { id: 'analytics', label: 'P&L', icon: 'trend' },
     { id: 'settings', label: 'Settings', icon: 'gear' },
   ];
 
   const handleExecute = async (params: any) => {
     if (params.isPaperTrading) {
       // Paper trading - create simulated position
-      const response = await authFetch('/api/paper-positions', {
+      const response = await authFetch('/api/paper-trade', {
         method: 'POST',
         body: JSON.stringify({
           strategy_id: activeStrategy.id,
@@ -122,8 +124,8 @@ function DashboardContent() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Paper trade failed');
+        const body = await response.text();
+        throw new Error(JSON.parse(body || '{}').error || 'Paper trade failed');
       }
 
       const result = await response.json();
@@ -131,8 +133,6 @@ function DashboardContent() {
       toast.success(`Paper position opened: ${params.symbol} × ${params.quantity}`);
       return result;
     }
-
-    if (isPaperOnly && !params.isPaperTrading) { throw new Error("Paper Mode — Orders Disabled"); }
 
     // Live trading: open Kite Publisher popup. The server-side execution
     // record is no longer created here — live orders redirect to Kite and
@@ -162,6 +162,64 @@ function DashboardContent() {
       `Order placed: ${params.symbol} × ${params.quantity}`
     );
     return { orderPlaced: true };
+  };
+
+  const handleExecuteInKite = async (stock: StockPick) => {
+    if (!isLoggedIn) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    try {
+      const entryPrice = stock.signalDetails?.entry ?? stock.currentPrice;
+      const stopLoss = stock.signalDetails?.stopLoss ?? 0;
+      const target1 = stock.signalDetails?.target1 ?? 0;
+      const isBracketed = stopLoss > 0 && target1 > 0;
+      await placeOrder({
+        exchange: 'NSE',
+        tradingsymbol: stock.symbol.replace('.NS', ''),
+        transaction_type: 'BUY',
+        quantity: 1,
+        order_type: isBracketed ? 'SL' : 'MARKET',
+        product: isBracketed ? 'MIS' : 'CNC',
+        price: entryPrice,
+        trigger_price: isBracketed ? stopLoss : undefined,
+        target: isBracketed ? target1 : undefined,
+        readonly: false,
+      });
+      toast.success(`Kite order opened for ${stock.symbol}`);
+    } catch (error: any) {
+      console.error('Kite order failed:', error);
+      if (error?.code === 'KITE_KEY_NOT_CONFIGURED') {
+        toast.error('Add and save your Zerodha Publisher API key in Settings → Connections.');
+        setActiveTab('settings');
+      } else {
+        toast.error(error?.message || 'Kite order failed. Check your Zerodha Publisher key and try again.');
+      }
+    }
+  };
+
+  const handleExecuteInKiteOld = async (stock: StockPick) => {
+    try {
+      // Use a conservative default quantity for the direct card action;
+      // users can review and edit the basket on Kite before confirming.
+      await placeOrder({
+        exchange: 'NSE',
+        tradingsymbol: stock.symbol.replace('.NS', ''),
+        transaction_type: 'BUY',
+        quantity: 1,
+        order_type: 'MARKET',
+        product: 'CNC',
+        readonly: false,
+      });
+      toast.success(`Kite order opened for ${stock.symbol}`);
+    } catch (err: any) {
+      if (err?.code === 'KITE_KEY_NOT_CONFIGURED') {
+        toast.error('Configure Kite API key first');
+        setActiveTab('settings');
+      } else {
+        toast.error(err?.message || 'Failed to open Kite order');
+      }
+    }
   };
 
   // Fetch capital data for execute modal
@@ -215,17 +273,19 @@ function DashboardContent() {
       if (sortBy === 'change-asc') return a.changePercent - b.changePercent;
       if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
       if (sortBy === 'upside-desc') {
+        if (!a.signalDetails || !b.signalDetails) return 0;
         const upsideA = ((a.signalDetails.target1 - a.currentPrice) / a.currentPrice) * 100;
         const upsideB = ((b.signalDetails.target1 - b.currentPrice) / b.currentPrice) * 100;
         return upsideB - upsideA;
       }
       if (sortBy === 'rs-desc') {
+        if (!a.signalDetails || !b.signalDetails) return 0;
         return (
           b.signalDetails.indicators.relativeStrengthVsSector -
           a.signalDetails.indicators.relativeStrengthVsSector
         );
       }
-      return 0; // Default rank (scanner engine order)
+      return 0;
     });
 
   const strongBuyCount = picks.filter((p) => p.signal === 'strong-buy').length;
@@ -244,7 +304,7 @@ function DashboardContent() {
         picks.reduce(
           (acc, p) =>
             acc +
-            ((p.signalDetails.target1 - p.currentPrice) / p.currentPrice) * 100,
+            (p.signalDetails ? ((p.signalDetails.target1 - p.currentPrice) / p.currentPrice) * 100 : 0),
           0
         ) / picks.length
       ).toFixed(1)
@@ -300,9 +360,6 @@ function DashboardContent() {
           >
             {([
               { id: 'signals', label: 'Signals' },
-              { id: 'sector-heatmap', label: 'Sectors' },
-              { id: 'executions', label: 'Trades' },
-              { id: 'analytics', label: 'P&L' },
               { id: 'settings', label: 'Settings' },
             ] as const).map((t) => {
               const isActive = activeTab === t.id;
@@ -336,22 +393,6 @@ function DashboardContent() {
 
           {/* Right cluster: status + account */}
           <div className="flex items-center gap-2">
-            {/* Status indicators — clickable for paper/live toggle */}
-            <button
-              onClick={() => setIsPaperOnly(!isPaperOnly)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-              title={`Switch to ${isPaperOnly ? 'Live' : 'Paper'} mode`}
-            >
-              <motion.span
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className={`w-2 h-2 rounded-full shrink-0 ${isPaperOnly ? 'bg-amber-400' : 'bg-emerald-500'}`}
-              />
-              <span className="text-[11px] font-bold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                {isPaperOnly ? 'PAPER' : 'LIVE'}
-              </span>
-            </button>
-
             {/* Data source indicator */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5">
               <span className="w-2 h-2 rounded-full shrink-0 bg-slate-300" />
@@ -373,27 +414,32 @@ function DashboardContent() {
               <div className="relative">
                 <button
                   onClick={() => setIsLoginCardOpen(!isLoginCardOpen)}
-                  className="flex items-center gap-2 cursor-pointer transition-colors rounded-lg shrink-0"
-                  style={{
-                    padding: 'clamp(0.25rem, 0.6cqi, 0.4rem) clamp(0.4rem, 1cqi, 0.6rem)',
-                    fontSize: 'var(--topbar-text)',
-                  }}
+                  className="flex items-center gap-2.5 cursor-pointer transition-all rounded-xl px-2.5 py-1.5 hover:bg-[color:var(--elevated-2)]"
                   aria-label="Account menu"
                   aria-expanded={isLoginCardOpen}
                 >
-                  {/* User avatar with initials */}
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: 'var(--accent-brand)' }}
-                  >
-                    <span className="text-[11px] font-bold" style={{ color: '#fff' }}>
-                      {(profile?.full_name?.[0] || user.email?.[0] || 'U').toUpperCase()}
+                  {/* Avatar with ring */}
+                  <div className="relative">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ring-2 ring-white/10"
+                      style={{ backgroundColor: 'var(--accent-brand)' }}
+                    >
+                      <span className="text-xs font-bold" style={{ color: '#fff' }}>
+                        {(profile?.full_name?.[0] || getUserInitial(user) || 'U').toUpperCase()}
+                      </span>
+                    </div>
+                    {/* Online indicator dot */}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[color:var(--ground)]" />
+                  </div>
+                  <div className="hidden sm:flex flex-col items-start leading-none">
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {profile?.full_name?.split(' ')[0] || getDisplayName(user)}
+                    </span>
+                    <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                      {user?.user_metadata?.username || 'Account'}
                     </span>
                   </div>
-                  <span className="text-xs font-medium hidden sm:block" style={{ color: 'var(--text-primary)' }}>
-                    {profile?.full_name?.split(' ')[0] || user.email?.split('@')[0]}
-                  </span>
-                  <svg className="w-3 h-3 hidden sm:block" style={{ color: 'var(--text-tertiary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                  <svg className="w-3 h-3 hidden sm:block transition-transform" style={{ color: 'var(--text-tertiary)', transform: isLoginCardOpen ? 'rotate(180deg)' : 'none' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
@@ -401,43 +447,69 @@ function DashboardContent() {
                 {isLoginCardOpen && (
                   <div
                     ref={loginDropdownRef}
-                    className="absolute right-0 top-full mt-1 w-52 rounded-xl border shadow-lg overflow-hidden"
+                    className="absolute right-0 top-full mt-2 w-64 rounded-2xl border shadow-xl overflow-hidden"
                     style={{
                       backgroundColor: 'var(--elevated-1)',
                       borderColor: 'var(--border-default)',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                      minWidth: '200px',
+                      boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
                       zIndex: 9999,
                     }}
                   >
-                    <div className="px-3 py-2.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                        {profile?.full_name || user.email}
-                      </p>
-                      <p className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-tertiary)' }}>
-                        {user.email}
-                      </p>
+                    {/* Profile header */}
+                    <div className="px-4 py-3.5 border-b flex items-center gap-3" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--elevated-2)' }}>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--accent-brand)' }}>
+                        <span className="text-sm font-bold" style={{ color: '#fff' }}>
+                          {(profile?.full_name?.[0] || getUserInitial(user) || 'U').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {profile?.full_name || getDisplayName(user)}
+                        </p>
+                        <p className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+                          {user?.user_metadata?.username || user?.email || ''}
+                        </p>
+
+                      </div>
                     </div>
-                    <button
-                      onClick={async () => {
-                        setIsLoginCardOpen(false);
-                        await signOut();
-                        toast.success('Signed out successfully');
-                      }}
-                      className="w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
-                    >
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--elevated-2)' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}>
-                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                          <polyline points="16 17 21 12 16 7"/>
-                          <line x1="21" y1="12" x2="9" y2="12"/>
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Sign out</p>
-                        <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Log out of your account</p>
-                      </div>
-                    </button>
+                    {/* Quick actions */}
+                    <div className="py-1">
+                      <button
+                        onClick={() => { setIsLoginCardOpen(false); setActiveTab('settings'); }}
+                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--elevated-2)' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}>
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1m15.5-7.5l-4.2 4.2m-4.6 4.6l-4.2 4.2m12.8 0l-4.2-4.2m-4.6-4.6l-4.2-4.2"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>My Profile</p>
+                          <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Settings & connections</p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setIsLoginCardOpen(false);
+                          await signOut();
+                          toast.success('Signed out successfully');
+                        }}
+                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--hazard-red-bg)' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--hazard-red)' }}>
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Sign out</p>
+                          <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Log out of your account</p>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -473,13 +545,6 @@ function DashboardContent() {
             )}
           </AnimatePresence>
         </header>
-
-        {/* Floating CapitalBar row — below top bar, above content. Only on signals tab. */}
-        {user && activeTab === 'signals' && (
-          <div className="flex items-center justify-center px-4 py-2 border-b" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--ground)' }}>
-            <CapitalBar isLoggedIn={isLoggedIn} isPaperMode={isPaperOnly} />
-          </div>
-        )}
 
         {/* ===== BODY: 100vh - 60px, flex row, sidebar + main (no full-page scroll). ===== */}
       <div className="kite-body">
@@ -767,7 +832,8 @@ function DashboardContent() {
                             stock={stock}
                             index={index}
                             onOpenExecuteModal={(stk) => setSelectedStockForExecute(stk)}
-                            isPaperOnly={isPaperOnly}
+                            onExecuteInKite={handleExecuteInKite}
+                            isLoggedIn={isLoggedIn}
                           />
                         ))}
                       </div>
@@ -823,25 +889,6 @@ function DashboardContent() {
               </>
             )}
 
-            {/* Sector Heatmap Tab */}
-            {activeTab === 'sector-heatmap' && <SectorStrengthExplorer />}
-
-            {/* Executions Tab */}
-            {activeTab === 'executions' && (
-              <ComingSoonPlaceholder
-                title="Live Trades"
-                subtitle="Trades placed via Kite are tracked on the Kite platform."
-              />
-            )}
-
-            {/* Analytics Tab */}
-            {activeTab === 'analytics' && (
-              <ComingSoonPlaceholder
-                title="P&L Analytics"
-                subtitle="Coming after paper trading execution is complete."
-              />
-            )}
-
             {/* Settings Tab */}
             {activeTab === 'settings' && (
               <SettingsPage
@@ -858,10 +905,6 @@ function DashboardContent() {
           tabs={mobileNavTabs}
           activeTab={activeTab}
           onChange={(id) => {
-            if (id === 'executions' || id === 'analytics') {
-              toast.info('Coming soon');
-              return;
-            }
             setActiveTab(id as typeof activeTab);
           }}
         />
@@ -876,7 +919,7 @@ function DashboardContent() {
           isLoggedIn={isLoggedIn}
           availableCapital={capitalData?.availableCapital || 0}
           riskLimitPct={capitalData?.riskLimitPct || 2}
-          isPaperTrading={isPaperOnly || (profile?.paper_trading_enabled ?? true)}
+          isPaperTrading={profile?.paper_trading_enabled ?? true}
         />
 
         {/* Auth Modal */}
@@ -891,11 +934,15 @@ export function App() {
   return (
     <AuthProvider>
       <StrategyProvider>
+        <TierProvider>
         <ToastProvider>
           <ThemeBootstrap />
           <MobileBodyClass />
-          <DashboardContent />
+          <UpgradeModal>
+            <DashboardContent />
+          </UpgradeModal>
         </ToastProvider>
+        </TierProvider>
       </StrategyProvider>
     </AuthProvider>
   );

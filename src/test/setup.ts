@@ -1,6 +1,7 @@
 // Minimal test setup — no jest-dom to avoid esbuild scanning parent dirs
 
 import { vi } from 'vitest';
+import '@testing-library/jest-dom';
 
 // ---------------------------------------------------------------------------
 // Shim React.act — @testing-library/react@16.x calls React.act which doesn't

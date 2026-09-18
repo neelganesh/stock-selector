@@ -21,7 +21,7 @@ interface SettingsPageProps {
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: 'user' as const },
-  { id: 'paper', label: 'Paper Trading', icon: 'note' as const },
+  { id: 'connections', label: 'Connections', icon: 'link' as const },
   { id: 'appearance', label: 'Appearance', icon: 'palette' as const },
 ] as const;
 
@@ -54,6 +54,12 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
   const [keyStatus, setKeyStatus] = useState<{ configured: boolean; working: boolean }>({ configured: false, working: false });
   const [isLoadingKeyStatus, setIsLoadingKeyStatus] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // MegaBull paper-trading key state
+  const [megabullKeyInput, setMegabullKeyInput] = useState('');
+  const [savedMegabullKey, setSavedMegabullKey] = useState<string | null>(null);
+  const [isSavingMegabullKey, setIsSavingMegabullKey] = useState(false);
+  const [isDeletingMegabullKey, setIsDeletingMegabullKey] = useState(false);
 
   // Key reveal functionality
   const [isRevealingKey, setIsRevealingKey] = useState(false);
@@ -130,10 +136,10 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     return () => clearTimeout(timer);
   }, [isLoggedIn]);
 
-  // Load profile name from user
+  // Load profile name from user (full_name stored in user_metadata)
   useEffect(() => {
     if (user) {
-      setProfileNameDraft(user.full_name ?? '');
+      setProfileNameDraft(user.user_metadata?.full_name ?? user.full_name ?? '');
     }
   }, [user]);
 
@@ -143,6 +149,64 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       fetchKeyStatus();
     }
   }, [activeSection, fetchKeyStatus]);
+
+  const fetchMegaBullKeyStatus = useCallback(async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch('/api/megabull', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      setSavedMegabullKey(data.configured ? data.maskedKey : null);
+    } catch {
+      setSavedMegabullKey(null);
+    }
+  }, [getAccessToken]);
+
+  useEffect(() => {
+    if (activeSection === 'connections') {
+      fetchMegaBullKeyStatus();
+      fetchKeyStatus();
+    }
+  }, [activeSection, fetchMegaBullKeyStatus, fetchKeyStatus]);
+
+  const handleSaveMegaBullKey = async () => {
+    if (!megabullKeyInput.trim()) return;
+    setIsSavingMegabullKey(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/megabull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ api_key: megabullKeyInput.trim() }),
+      });
+      if (!res.ok) throw new Error((await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed to save MegaBull API key'; } catch { return 'Failed to save MegaBull API key'; } })));
+      setMegabullKeyInput('');
+      await fetchMegaBullKeyStatus();
+      toast.success('MegaBull API key saved');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save MegaBull API key');
+    } finally {
+      setIsSavingMegabullKey(false);
+    }
+  };
+
+  const handleDeleteMegaBullKey = async () => {
+    setIsDeletingMegabullKey(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/megabull', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Failed to remove MegaBull API key');
+      setSavedMegabullKey(null);
+      toast.success('MegaBull API key removed');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to remove MegaBull API key');
+    } finally {
+      setIsDeletingMegabullKey(false);
+    }
+  };
 
   // Key reveal handlers
   const handleRevealKey = useCallback(async () => {
@@ -160,7 +224,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed'; } catch { return 'Failed'; } });
         throw new Error(err.error || 'Failed to reveal API key');
       }
 
@@ -234,8 +298,8 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         body: JSON.stringify(draft),
       });
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Save failed');
+        const body = await response.text();
+        throw new Error(JSON.parse(body || '{}').error || 'Save failed');
       }
       const data = await response.json();
       setSettings(data);
@@ -271,7 +335,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         body: JSON.stringify({ full_name: profileNameDraft }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed'; } catch { return 'Failed'; } });
         throw new Error(err.error || 'Update failed');
       }
       await refreshProfile();
@@ -303,7 +367,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed'; } catch { return 'Failed'; } });
         throw new Error(err.error || 'Password change failed');
       }
       setPasswordForm({ current: '', newPass: '' });
@@ -321,7 +385,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     try {
       const token = await getAccessToken();
       if (!token) throw new Error('Not signed in');
-      const res = await fetch('/api/kite/save-key', {
+      const res = await fetch('/api/kite', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -330,7 +394,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         body: JSON.stringify({ api_key: apiKeyInput.trim() }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed'; } catch { return 'Failed'; } });
         throw new Error(err.error || 'Failed to save API key');
       }
       const masked = 'kitepro' + '•'.repeat(12);
@@ -350,12 +414,12 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
     try {
       const token = await getAccessToken();
       if (!token) throw new Error('Not signed in');
-      const res = await fetch('/api/kite/delete-key', {
+      const res = await fetch('/api/kite', {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed'; } catch { return 'Failed'; } });
         throw new Error(err.error || 'Failed to remove API key');
       }
       setSavedApiKey(null);
@@ -379,7 +443,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.text().then(t => { try { return JSON.parse(t || '{}').error || 'Failed'; } catch { return 'Failed'; } });
         throw new Error(err.error || 'Delete failed');
       }
       // The modal will call signOut() after this succeeds
@@ -427,7 +491,7 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
       {/* Delete Account Modal */}
       <DeleteAccountModal
         isOpen={isDeleteModalOpen}
-        email={user?.email ?? ''}
+        email={user?.user_metadata?.username ?? user?.email ?? ''}
         onConfirm={handleDeleteAccount}
         onCancel={() => setIsDeleteModalOpen(false)}
         isDeleting={isDeletingAccount}
@@ -451,9 +515,9 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
         ))}
       </div>
 
-      {/* Save bar for paper trading */}
+      {/* Save bar for unsaved changes */}
       <AnimatePresence>
-        {activeSection === 'paper' && JSON.stringify(settings) !== JSON.stringify(draft) && (
+        {JSON.stringify(settings) !== JSON.stringify(draft) && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -531,12 +595,38 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
               isLoadingKeyStatus={isLoadingKeyStatus}
               onSaveApiKey={handleSaveApiKey}
               onDeleteApiKey={handleDeleteApiKey}
+              isRevealingKey={isRevealingKey}
+              revealedKey={revealedKey}
+              handleRevealKey={handleRevealKey}
+              handleCopyKey={handleCopyKey}
+              handleApiKeyBlur={handleApiKeyBlur}
+              isCopyingKey={isCopyingKey}
+              revealTimeout={revealTimeout}
+              setIsRevealingKey={setIsRevealingKey}
+              setRevealedKey={setRevealedKey}
             />
           )}
-          {activeSection === 'paper' && (
-            <PaperTradingSettings
-              draft={draft}
-              updateDraft={updateDraft}
+          {activeSection === 'connections' && (
+            <ConnectionsSettings
+              kite={{
+                savedApiKey,
+                apiKeyInput,
+                setApiKeyInput,
+                isSavingKey,
+                isDeletingKey,
+                onSave: handleSaveApiKey,
+                onDelete: handleDeleteApiKey,
+                status: keyStatus,
+              }}
+              megabull={{
+                savedApiKey: savedMegabullKey,
+                apiKeyInput: megabullKeyInput,
+                setApiKeyInput: setMegabullKeyInput,
+                isSavingKey: isSavingMegabullKey,
+                isDeletingKey: isDeletingMegabullKey,
+                onSave: handleSaveMegaBullKey,
+                onDelete: handleDeleteMegaBullKey,
+              }}
             />
           )}
           {activeSection === 'appearance' && (
@@ -556,6 +646,81 @@ export function SettingsPage({ isLoggedIn, onLoginClick }: SettingsPageProps) {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// API connection onboarding
+// ---------------------------------------------------------------------------
+
+type ConnectionKeyProps = {
+  savedApiKey: string | null;
+  apiKeyInput: string;
+  setApiKeyInput: (value: string) => void;
+  isSavingKey: boolean;
+  isDeletingKey: boolean;
+  onSave: () => void;
+  onDelete: () => void;
+  status?: { configured: boolean; working: boolean };
+};
+
+function ConnectionKeyCard({
+  title,
+  description,
+  setupSteps,
+  keyData,
+}: {
+  title: string;
+  description: string;
+  setupSteps: string[];
+  keyData: ConnectionKeyProps;
+}) {
+  const { savedApiKey, apiKeyInput, setApiKeyInput, isSavingKey, isDeletingKey, onSave, onDelete, status } = keyData;
+  return (
+    <GlassCard variant="default" padding="lg" className="space-y-4">
+      <div>
+        <h3 className="text-sm font-extrabold text-[color:var(--text-primary)] flex items-center gap-2">
+          <Icon name="link" size={15} strokeWidth={2} /> {title}
+        </h3>
+        <p className="text-xs text-[color:var(--text-secondary)] mt-1">{description}</p>
+      </div>
+      <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[color:var(--ground-secondary)] p-3">
+        <p className="text-[10px] font-extrabold uppercase tracking-wider text-[color:var(--text-tertiary)] mb-2">Setup</p>
+        <ol className="space-y-1.5 text-xs text-[color:var(--text-secondary)]">
+          {setupSteps.map((step, index) => <li key={step} className="flex gap-2"><span className="font-bold text-[color:var(--accent)]">{index + 1}.</span><span>{step}</span></li>)}
+        </ol>
+      </div>
+      {savedApiKey ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--ground-secondary)] p-3">
+          <div>
+            <p className="text-xs font-bold text-[color:var(--text-primary)]">Connected</p>
+            <p className="text-xs font-mono text-[color:var(--text-secondary)]">{savedApiKey}</p>
+            {status && <p className="text-[10px] text-[color:var(--positive)] mt-1">{status.configured ? 'Ready' : 'Needs setup'}</p>}
+          </div>
+          <button onClick={onDelete} disabled={isDeletingKey} className="px-3 py-1.5 rounded-lg text-xs font-bold text-[color:var(--negative)] border border-[color:var(--negative)]/30 hover:bg-[color:var(--negative)]/10 disabled:opacity-50">
+            {isDeletingKey ? 'Removing...' : 'Remove'}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)} placeholder="Paste API key" className="w-full px-3 py-2 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--elevated-1)] text-sm font-mono text-[color:var(--text-primary)] placeholder:text-[color:var(--text-tertiary)] focus:outline-none focus:border-[color:var(--accent)]" />
+          <button onClick={onSave} disabled={isSavingKey || !apiKeyInput.trim()} className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[color:var(--accent)] hover:opacity-90 disabled:opacity-50">
+            {isSavingKey ? 'Saving securely...' : 'Save API Key'}
+          </button>
+        </div>
+      )}
+      <p className="text-[10px] text-[color:var(--text-tertiary)]">Stored encrypted on the server. The key is never exposed in the browser after saving.</p>
+    </GlassCard>
+  );
+}
+
+function ConnectionsSettings({ kite, megabull }: { kite: ConnectionKeyProps; megabull: ConnectionKeyProps }) {
+  return (
+    <div className="space-y-4">
+      <div><h2 className="text-base font-extrabold text-[color:var(--text-primary)]">Trading Connections</h2><p className="text-xs text-[color:var(--text-secondary)] mt-1">Connect each account separately. Kite is used for real-order review; MegaBull is used for simulated trades and P&L.</p></div>
+      <ConnectionKeyCard title="Zerodha Kite Publisher" description="Create a Kite Connect app, copy its API key, and use it to open reviewable orders on Kite." setupSteps={["Open developers.kite.trade and sign in.", "Create a Kite Connect app with Publisher access.", "Copy the API key and paste it here."]} keyData={kite} />
+      <ConnectionKeyCard title="MegaBull Paper Trading" description="Create a MegaBull paper-trading API key to place virtual orders and sync positions and P&L into this console." setupSteps={["Create or sign in to a MegaBull account.", "Open Profile and generate an API key.", "Paste the key here; MegaBull keys expire monthly."]} keyData={megabull} />
+    </div>
+  );
+}
 
 function TextField({
   label,
@@ -610,6 +775,12 @@ function ProfileSettings({
   isLoadingKeyStatus,
   onSaveApiKey,
   onDeleteApiKey,
+  isRevealingKey,
+  revealedKey,
+  handleRevealKey,
+  handleCopyKey,
+  handleApiKeyBlur,
+  isCopyingKey,
 }: {
   user: { email?: string | null; full_name?: string | null } | null;
   profileName: string;
@@ -633,6 +804,15 @@ function ProfileSettings({
   isLoadingKeyStatus: boolean;
   onSaveApiKey: () => void;
   onDeleteApiKey: () => void;
+  isRevealingKey: boolean;
+  revealedKey: string;
+  handleRevealKey: () => void;
+  handleCopyKey: () => void;
+  handleApiKeyBlur: () => void;
+  isCopyingKey: boolean;
+  revealTimeout: NodeJS.Timeout | null;
+  setIsRevealingKey: (v: boolean) => void;
+  setRevealedKey: (v: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -655,14 +835,14 @@ function ProfileSettings({
         <div>
           <label className="text-xs font-bold text-[color:var(--text-primary)] block mb-1">Email</label>
           <div className="px-3 py-2 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--ground-secondary)] text-sm text-[color:var(--text-secondary)]">
-            {user?.email ?? 'Not available'}
+            {user?.user_metadata?.username ?? user?.email?.split('@')[0] ?? 'Not available'}
           </div>
           <p className="text-[10px] text-[color:var(--text-tertiary)] mt-1">Email cannot be changed</p>
         </div>
 
         <button
           onClick={onSaveProfileName}
-          disabled={isSavingProfile || profileName === (user?.full_name ?? '')}
+          disabled={isSavingProfile || profileName.trim() === '' || profileName === (user?.user_metadata?.full_name ?? user?.full_name ?? '')}
           className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[color:var(--accent)] hover:opacity-90 disabled:opacity-50 transition-colors"
         >
           {isSavingProfile ? 'Saving...' : 'Save Name'}
@@ -707,112 +887,6 @@ function ProfileSettings({
         </form>
       </GlassCard>
 
-      {/* Zerodha Publisher API Key */}
-      <GlassCard variant="default" padding="lg" className="space-y-4">
-        <div>
-          <h3 className="text-sm font-extrabold text-[color:var(--text-primary)] flex items-center gap-2">
-            <Icon name="link" size={15} strokeWidth={2} />
-            Zerodha Publisher API Key
-          </h3>
-          <p className="text-xs text-[color:var(--text-secondary)] mt-1">
-            Publisher mode connects your Kite account without OAuth.
-          </p>
-        </div>
-
-        {savedApiKey ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[color:var(--ground-secondary)] border border-[color:var(--border-default)]">
-              <div>
-                <p className="text-xs font-bold text-[color:var(--text-primary)]">Saved API Key</p>
-                {/* Reveal/hide functionality with temporary reveal and copy */}
-                <div className="flex items-center gap-2">
-                  {!isRevealingKey ? (
-                    <button
-                      onClick={handleRevealKey}
-                      disabled={isRevealingKey || isSavingKey || isDeletingKey}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] transition-colors"
-                    >
-                      Show
-                    </button>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        value={revealedKey}
-                        readOnly
-                        className="flex-1 px-3 py-2 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--elevated-1)] text-sm font-mono text-[color:var(--text-primary)]"
-                        onBlur={handleApiKeyBlur}
-                      />
-                      <button
-                        onClick={handleCopyKey}
-                        disabled={isCopyingKey}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-[color:var(--accent)] hover:opacity-90 disabled:opacity-50 transition-colors"
-                      >
-                        {isCopyingKey ? 'Copied!' : 'Copy'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={onDeleteApiKey}
-                disabled={isDeletingKey}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-[color:var(--negative)] border border-[color:var(--negative)]/30 hover:bg-[color:var(--negative)]/10 disabled:opacity-50 transition-colors"
-              >
-                {isDeletingKey ? 'Removing...' : 'Remove'}
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className={keyStatus.configured ? 'w-2 h-2 rounded-full bg-[color:var(--positive)]' : 'w-2 h-2 rounded-full bg-[color:var(--text-tertiary)]'} />
-                  <span className="text-xs text-[color:var(--text-secondary)]">
-                    {isLoadingKeyStatus ? 'Checking...' : keyStatus.configured ? 'Configured' : 'Not configured'}
-                  </span>
-                </div>
-                {keyStatus.configured && (
-                  <div className="flex items-center gap-1.5">
-                    <span className={keyStatus.working ? 'w-2 h-2 rounded-full bg-[color:var(--positive)]' : 'w-2 h-2 rounded-full bg-[color:var(--warning-amber)]'} />
-                    <span className="text-xs text-[color:var(--text-secondary)]">
-                      {keyStatus.working ? 'Working' : 'Not working'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={e => setApiKeyInput(e.target.value)}
-                placeholder="Enter your Kite API key"
-                className="w-full px-3 py-2 pr-10 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--elevated-1)] text-sm font-mono text-[color:var(--text-primary)] placeholder:text-[color:var(--text-tertiary)] focus:outline-none focus:border-[color:var(--accent)]"
-                onBlur={handleApiKeyBlur}
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)]"
-                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
-              >
-                <Icon name={showApiKey ? 'eye-off' : 'eye'} size={15} strokeWidth={2} />
-              </button>
-            </div>
-            <button
-              onClick={onSaveApiKey}
-              disabled={isSavingKey || !apiKeyInput.trim()}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[color:var(--accent)] hover:opacity-90 disabled:opacity-50 transition-colors"
-            >
-              {isSavingKey ? 'Saving...' : 'Save API Key'}
-            </button>
-          </div>
-        )}
-      </GlassCard>
-
       {/* Delete Account */}
       <GlassCard variant="default" padding="lg">
         <div className="flex items-center justify-between">
@@ -831,58 +905,6 @@ function ProfileSettings({
         </div>
       </GlassCard>
     </div>
-  );
-}
-
-function PaperTradingSettings({
-  draft,
-  updateDraft,
-}: {
-  draft: UserSettings;
-  updateDraft: <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => void;
-}) {
-  return (
-    <GlassCard variant="default" padding="lg" className="space-y-4">
-      <div>
-        <h3 className="text-sm font-extrabold text-[color:var(--text-primary)] flex items-center gap-2">
-          <Icon name="note" size={15} strokeWidth={2} />
-          Paper Trading
-        </h3>
-        <p className="text-xs text-[color:var(--text-secondary)] mt-1">
-          Test strategies with simulated trades before risking real capital.
-        </p>
-      </div>
-
-      <label className="flex items-center justify-between p-3 rounded-xl bg-[color:var(--ground-secondary)] cursor-pointer">
-        <div>
-          <div className="text-sm font-bold text-[color:var(--text-primary)]">Enable Paper Trading</div>
-          <div className="text-xs text-[color:var(--text-secondary)]">Show paper trading options in execute modal</div>
-        </div>
-        <input
-          type="checkbox"
-          checked={draft.paper_trading_enabled}
-          onChange={e => updateDraft('paper_trading_enabled', e.target.checked)}
-          className="w-5 h-5 rounded border-[color:var(--border-default)] text-[color:var(--accent)] focus:ring-[color:var(--accent)]"
-        />
-      </label>
-
-      <div>
-        <label className="text-xs font-bold text-[color:var(--text-primary)] block mb-1">Virtual Capital</label>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[color:var(--text-tertiary)]">{'₹'}</span>
-          <input
-            type="number"
-            value={draft.paper_trading_capital}
-            min={10000}
-            max={100000000}
-            step={10000}
-            onChange={e => updateDraft('paper_trading_capital', parseFloat(e.target.value) || 0)}
-            className="w-full pl-7 pr-3 py-2 rounded-lg border border-[color:var(--border-default)] bg-[color:var(--elevated-1)] text-sm font-bold text-[color:var(--text-primary)] focus:outline-none focus:border-[color:var(--accent)]"
-          />
-        </div>
-        <p className="text-[10px] text-[color:var(--text-tertiary)] mt-1">Starting capital for paper trading simulation</p>
-      </div>
-    </GlassCard>
   );
 }
 

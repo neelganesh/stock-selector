@@ -38,11 +38,10 @@ CREATE TABLE user_profiles (
   paper_trading_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   paper_trading_capital NUMERIC(15, 2) NOT NULL DEFAULT 1000000,
   
-  -- Zerodha Credentials (encrypted at rest via Supabase Vault or app-level encryption)
-  zerodha_api_key TEXT,
-  zerodha_access_token TEXT,
-  zerodha_access_token_expires_at TIMESTAMPTZ,
-  zerodha_user_id TEXT,
+  -- Kite Credentials (encrypted at rest via Supabase Vault or app-level encryption)
+  kite_api_key TEXT,
+  kite_access_token TEXT,
+  kite_user_id TEXT,
   
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

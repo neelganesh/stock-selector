@@ -58,7 +58,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse): Promise<void>
   const { data, error } = await supabase
     .from('user_profiles')
     .select(
-      'id, user_id, email, full_name, paper_trading_enabled, paper_trading_capital, created_at, updated_at',
+      'id, user_id, email, full_name, paper_trading_enabled, paper_trading_capital, kite_api_key, created_at, updated_at',
     )
     .eq('user_id', user.id)
     .maybeSingle();
@@ -103,7 +103,7 @@ async function handlePatch(req: VercelRequest, res: VercelResponse): Promise<voi
     .update(sanitized)
     .eq('user_id', user.id)
     .select(
-      'id, user_id, email, full_name, paper_trading_enabled, paper_trading_capital, created_at, updated_at',
+      'id, user_id, email, full_name, paper_trading_enabled, paper_trading_capital, kite_api_key, created_at, updated_at',
     )
     .maybeSingle();
 

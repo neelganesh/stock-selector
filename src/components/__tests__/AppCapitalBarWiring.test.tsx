@@ -64,6 +64,18 @@ vi.mock('../../context/StrategyContext', () => ({
     setCustomScripList: vi.fn(),
   }),
 }));
+vi.mock('../UpgradeModal', () => ({ UpgradeModal: ({ children }: { children: any }) => children }));
+vi.mock('../../context/TierContext', () => ({
+  TierProvider: ({ children }: { children: any }) => children,
+  useTier: () => ({
+    tier: 'free',
+    tierConfig: { label: 'Free', priceMonthly: null, priceINR: null, features: [], maxStrategies: 3 },
+    loading: false,
+    isPro: false,
+    upgradeToPro: vi.fn(),
+    refreshTier: vi.fn(),
+  }),
+}));
 
 // Mock ZerodhaStatusButton to prevent network calls to /api/kite/key-status
 vi.mock('../ZerodhaStatusButton', () => ({

@@ -69,6 +69,18 @@ vi.mock('../../context/StrategyContext', () => ({
     setCustomScripList: vi.fn(),
   }),
 }));
+vi.mock('../UpgradeModal', () => ({ UpgradeModal: ({ children }: { children: any }) => children }));
+vi.mock('../../context/TierContext', () => ({
+  TierProvider: ({ children }: { children: any }) => children,
+  useTier: () => ({
+    tier: 'free',
+    tierConfig: { label: 'Free', priceMonthly: null, priceINR: null, features: [], maxStrategies: 3 },
+    loading: false,
+    isPro: false,
+    upgradeToPro: vi.fn(),
+    refreshTier: vi.fn(),
+  }),
+}));
 
 
 globalThis.fetch = vi.fn().mockResolvedValue({
@@ -106,7 +118,7 @@ describe('App.tsx top bar de-clutter', () => {
   it('shows "Sign in" button when not connected to Kite (yfinance fallback)', async () => {
     mockStrategyState.activeDataSource = 'yfinance (Fallback)';
     render(<App />);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect(screen.getByRole('button', { name: /sign in/i })).toBeTruthy();
   });
 });

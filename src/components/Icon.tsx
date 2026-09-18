@@ -16,7 +16,7 @@ export type IconName =
   | 'arrow-up' | 'arrow-down' | 'check' | 'x' | 'chevron-down'
   | 'alert' | 'target' | 'stop' | 'logout' | 'clock' | 'trash'
   | 'import' | 'info' | 'filter' | 'layers' | 'link' | 'user'
-  | 'eye' | 'eye-off' | 'lock';
+  | 'eye' | 'eye-off' | 'lock' | 'external-link';
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -186,6 +186,13 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M12 3v12M7 10l5 5 5-5" />
       <path d="M5 21h14" />
+    </>
+  ),
+
+  'external-link': (
+    <>
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+      <path d="M15 3h6v6M10 14L21 3" />
     </>
   ),
 

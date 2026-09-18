@@ -236,8 +236,13 @@ describe('POST /api/kite?publish=true (publish ticket)', () => {
     const res = mockRes();
     await kiteHandler(req, res);
     expect(res._status).toBe(200);
-    expect((res._data as any).ticket).toBeTruthy();
-    expect((res._data as any).expiresAt).toBeTruthy();
+    // Contract: fields the frontend reads directly (PublishTicket shape)
+    expect((res._data as any).apiKey).toBe('kite_key');
+    expect((res._data as any).nonce).toBeTruthy();
+    expect(typeof (res._data as any).expiresAt).toBe('number');
+    expect((res._data as any).ttlSeconds).toBe(60);
+    // No base64 envelope — blank-key popup bug regression guard
+    expect((res._data as any).ticket).toBeUndefined();
   });
 
   it('returns 400 when decrypt fails', async () => {

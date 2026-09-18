@@ -34,12 +34,14 @@ async function getEncryptedKey(userId: string): Promise<string | null> {
 /** Issue a short-lived publish ticket (plaintext API key, expires in 60 s). */
 function buildPublishTicket(apiKey: string, userId: string): object {
   const issuedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
-  // Encode a simple compact-JWK-like structure (not a real JWK — server use only)
-  const ticket = Buffer.from(
-    JSON.stringify({ apiKey, userId, issuedAt, expiresAt }),
-  ).toString('base64');
-  return { ticket, expiresAt };
+  const expiresAt = Date.now() + 60_000; // unix ms — frontend reads this field directly
+  return {
+    apiKey, // Publisher.js reads this directly; blank key => Kite "Missing or empty field api_key"
+    nonce: crypto.randomUUID(),
+    issuedAt,
+    expiresAt,
+    ttlSeconds: 60,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -166,9 +168,9 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     switch (req.method) {
-      case 'GET':    return handleGet(req, res);
-      case 'POST':   return handlePost(req, res);
-      case 'DELETE': return handleDelete(req, res);
+      case 'GET':    return await handleGet(req, res);
+      case 'POST':   return await handlePost(req, res);
+      case 'DELETE': return await handleDelete(req, res);
       default:
         return void res.status(405).json({ error: 'Method not allowed' });
     }

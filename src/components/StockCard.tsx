@@ -26,18 +26,21 @@ function CompanyLogo({ ticker, size = 28 }: { ticker: string; size?: number }) {
 }
 
 interface StockCardProps {
-  isPaperOnly?: boolean;
   stock: StockPick;
   index?: number;
   onOpenExecuteModal?: (stock: StockPick) => void;
+  onExecuteInKite?: (stock: StockPick) => void;
+  isLoggedIn?: boolean;
 }
 
-const formatPrice = (value: number) =>
-  new Intl.NumberFormat('en-IN', {
+const formatPrice = (value: number) => {
+  if (value == null || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: 2,
   }).format(value);
+};
 
 const formatPercent = (value: number) => {
   const sign = value >= 0 ? '+' : '';
@@ -71,34 +74,44 @@ const displayValue = (value: string | undefined | null) =>
  * boxes around icons or chevrons. Symbol monogram is a font. Padding,
  * font-size, and icon size all scale via cqi.
  */
-export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = false }: StockCardProps) {
+export default function StockCard({ stock, index, onOpenExecuteModal, onExecuteInKite, isLoggedIn }: StockCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isPositive = stock.change >= 0;
   const prefersReducedMotion = useReducedMotion();
 
-  const risk = Math.max(0.1, stock.signalDetails.entry - stock.signalDetails.stopLoss);
-  const reward = Math.max(0.1, stock.signalDetails.target1 - stock.signalDetails.entry);
+  // Guard against missing signalDetails — show empty card until data loads
+  const sd = stock.signalDetails;
+  if (!sd) {
+    return (
+      <GlassCard variant="default" padding="lg">
+        <div className="animate-pulse space-y-3">
+          <div className="h-4 w-24 rounded bg-[color:var(--ground-secondary)]" />
+          <div className="h-3 w-full rounded bg-[color:var(--ground-secondary)]" />
+          <div className="h-3 w-2/3 rounded bg-[color:var(--ground-secondary)]" />
+        </div>
+      </GlassCard>
+    );
+  }
+
+  const risk = Math.max(0.1, sd.entry - sd.stopLoss);
+  const reward = Math.max(0.1, sd.target1 - sd.entry);
   const rrRatio = (reward / risk).toFixed(2);
-  const upsidePercent =
-    ((stock.signalDetails.target1 - stock.currentPrice) / stock.currentPrice) * 100;
+  const upsidePercent = ((sd.target1 - stock.currentPrice) / stock.currentPrice) * 100;
 
   const { currentPos, target1Pos, stopLossPos, entryPos } = useMemo(() => {
-    const min = Math.min(stock.signalDetails.stopLoss, stock.currentPrice) * 0.98;
-    const max = Math.max(
-      stock.signalDetails.target2 || stock.signalDetails.target1,
-      stock.currentPrice
-    ) * 1.02;
+    const min = Math.min(sd.stopLoss, stock.currentPrice) * 0.98;
+    const max = Math.max(sd.target2 || sd.target1, stock.currentPrice) * 1.02;
     const range = max - min;
     const pos = (val: number) => Math.min(100, Math.max(0, ((val - min) / range) * 100));
     return {
-      stopLossPos: pos(stock.signalDetails.stopLoss),
+      stopLossPos: pos(sd.stopLoss),
       currentPos: pos(stock.currentPrice),
-      target1Pos: pos(stock.signalDetails.target1),
-      entryPos: pos(stock.signalDetails.entry),
+      target1Pos: pos(sd.target1),
+      entryPos: pos(sd.entry),
     };
-  }, [stock.signalDetails, stock.currentPrice]);
+  }, [sd, stock.currentPrice]);
 
-  const renkoInfo = stock.signalDetails.indicators?.renko;
+  const renkoInfo = sd.indicators?.renko;
 
   // Volume / market cap is display-only — label it so the compact value is
   // readable at a glance instead of a bare number.
@@ -299,6 +312,29 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
           </div>
         )}
 
+        {/* Action bar — always visible on every signal card */}
+        {isLoggedIn && onExecuteInKite && (
+          <div className="bg-white border-t border-[color:var(--border-subtle)] p-2">
+            <div className="grid grid-cols-1">
+              {onExecuteInKite && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExecuteInKite(stock);
+                  }}
+                  className="py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-90"
+                  style={{ backgroundColor: '#16a34a', color: '#fff', fontSize: 'clamp(10px, 2.4cqi, 12px)' }}
+                >
+                  <Icon name="external-link" size={14} strokeWidth={2.5} />
+                  <span className="hidden sm:inline">Execute in Kite</span>
+                  <span className="sm:hidden">Kite</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* EXPANDED DETAIL — animation reveals below the always-visible header */}
         <AnimatePresence initial={false}>
           {isExpanded && (
@@ -338,13 +374,13 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
                       label="Stop Loss"
                       markerPos={stopLossPos}
                       markerColor="var(--hazard-red)"
-                      value={formatPrice(stock.signalDetails.stopLoss)}
+                      value={formatPrice(sd.stopLoss)}
                     />
                     <LadderRow
                       label="Entry"
                       markerPos={entryPos}
                       markerColor="var(--text-primary)"
-                      value={formatPrice(stock.signalDetails.entry)}
+                      value={formatPrice(sd.entry)}
                     />
                     <LadderRow
                       label="Current"
@@ -356,7 +392,7 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
                       label="Target 1"
                       markerPos={target1Pos}
                       markerColor="var(--success-green)"
-                      value={formatPrice(stock.signalDetails.target1)}
+                      value={formatPrice(sd.target1)}
                     />
                   </div>
                 </div>
@@ -364,11 +400,11 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
                 {/* Target 2 — the one level the ladder does not carry. Shown
                     only when the strategy produced a second target; R:R already
                     lives in the always-visible sub-row, so nothing duplicates. */}
-                {stock.signalDetails.target2 !== undefined && (
+                {sd.target2 !== undefined && (
                   <div className="grid grid-cols-2 gap-2.5">
                     <MetricCell
                       label="Target 2"
-                      value={formatPrice(stock.signalDetails.target2)}
+                      value={formatPrice(sd.target2)}
                     />
                   </div>
                 )}
@@ -393,32 +429,55 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
                     className="leading-relaxed text-[color:var(--text-secondary)] font-medium break-words"
                     style={{ fontSize: 'clamp(11px, 2.8cqi, 13px)' }}
                   >
-                    {stock.signalDetails.rationale}
+                    {sd.rationale}
                   </p>
                 </div>
 
-                {/* Anchored action row — the Execute CTA rests at the bottom of
-                    the card, not inlined with a section header. */}
-                {onOpenExecuteModal && (
+                {/* Action bar — visible without expanding */}
+                <div className="bg-white border-t border-[color:var(--border-subtle)]">
                   <div className="pt-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenExecuteModal(stock);
-                      }}
-                      disabled={isPaperOnly}
-                      className="w-full py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{
-                        backgroundColor: 'var(--accent-blue)',
-                        color: 'var(--accent-fg)',
-                        fontSize: 'clamp(11px, 2.8cqi, 13px)',
-                      }}
-                    >
-                      <Icon name="arrow-right" size={16} strokeWidth={2.5} />
-                      {isPaperOnly ? "Paper Mode — Orders Disabled" : "Execute"}
-                    </button>
+                    {isLoggedIn && onExecuteInKite && (
+                      <>
+                        <div className="grid grid-cols-1">
+                          {onExecuteInKite && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onExecuteInKite(stock);
+                              }}
+                              className="py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] hover:opacity-90"
+                              style={{
+                                backgroundColor: '#16a34a',
+                                color: '#fff',
+                                fontSize: 'clamp(10px, 2.4cqi, 12px)',
+                              }}
+                            >
+                              <Icon name="external-link" size={14} strokeWidth={2.5} />
+                              <span className="hidden sm:inline">Execute in Kite</span>
+                              <span className="sm:hidden">Kite</span>
+                            </button>
+                          )}
+                          {onOpenExecuteModal && !onExecuteInKite && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenExecuteModal(stock);
+                              }}
+                              className="col-span-2 py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{
+                                backgroundColor: 'var(--accent-blue)',
+                                color: 'var(--accent-fg)',
+                                fontSize: 'clamp(11px, 2.8cqi, 13px)',
+                              }}
+                            >
+                              <Icon name="arrow-right" size={16} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </motion.div>
           )}
@@ -429,8 +488,6 @@ export function StockCard({ stock, index = 0, onOpenExecuteModal, isPaperOnly = 
 }
 
 function LadderRow({
-  label,
-  markerPos,
   markerColor,
   value,
 }: {

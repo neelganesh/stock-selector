@@ -33,10 +33,22 @@ export type UserProfile = {
   email: string;
   full_name: string | null;
   avatar_url: string | null;
+
+  // Capital & Risk Configuration
+  total_capital: number;
+  risk_per_trade_pct: number;
+  max_position_pct: number;
+  max_sector_pct: number;
+  max_open_strategies: number;
+  daily_loss_limit_pct: number;
+
+  // Paper Trading
   paper_trading_enabled: boolean;
   paper_trading_capital: number;
-  /** AES-256-GCM ciphertext (v1:iv:tag:ct), never the plaintext. */
+
+  // Kite
   kite_api_key: string | null;
+
   created_at: string;
   updated_at: string;
 };
