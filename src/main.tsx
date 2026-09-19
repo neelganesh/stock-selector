@@ -44,6 +44,18 @@ try {
       }
     }
   }, 100);
+  
+  // Force replace loading spinner after 3 seconds regardless
+  setTimeout(() => {
+    const spinner = document.querySelector('#root > div[style*="Loading Quant Vision"]');
+    if (spinner) {
+      console.log('[main.tsx] Force replacing loading spinner after 3s');
+      const rootEl = document.getElementById('root');
+      if (rootEl) {
+        rootEl.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;background:#ff7043;color:#fff;padding:20px;text-align:center;font-family:monospace;font-size:14px;z-index:9999"><h2>⚠️ React render completed but spinner not replaced</h2><p>App component may have loading state stuck</p><button onclick="window.location.reload()" style="margin-top:16px;padding:10px 20px;background:#fff;color:#ff7043;border:none;border-radius:4px;cursor:pointer">Reload</button></div>';
+      }
+    }
+  }, 3000);
 } catch (e) {
   console.error('[main.tsx] RENDER ERROR:', e);
   const el = document.getElementById('js-error');
