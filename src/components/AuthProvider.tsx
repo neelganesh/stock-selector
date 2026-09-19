@@ -58,34 +58,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, fetchProfile]);
 
   useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      if (!supabase) {
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('[Auth] onAuthStateChange:', { event: _event, hasSession: !!session, user: session?.user?.email });
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
+      // Timeout fallback: ensure loading never stays true forever
+      const timeoutId = setTimeout(() => {
+        console.warn('[Auth] Loading timeout - forcing loading=false');
+        setLoading(false);
+      }, 5000);
 
-    return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+      // Get initial session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        clearTimeout(timeoutId);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        }
+        setLoading(false);
+      }).catch((err) => {
+        clearTimeout(timeoutId);
+        console.error('[Auth] getSession error:', err);
+        setLoading(false);
+      });
+
+      // Listen for auth changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        console.log('[Auth] onAuthStateChange:', { event: _event, hasSession: !!session, user: session?.user?.email });
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
+      });
+
+      return () => {
+        clearTimeout(timeoutId);
+        subscription.unsubscribe();
+      };
+    }, [fetchProfile]);
 
   const signIn = async (username: string, password: string) => {
     console.log('[Auth] signIn called with:', username);
