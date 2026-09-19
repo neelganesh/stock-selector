@@ -145,54 +145,8 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
     }
   }, [picks]);
 
-  // Prefetch-on-idle: after initial signals load, prefetch next page data
-  // using requestIdleCallback (with setTimeout fallback)
-  useEffect(() => {
-    if (picks.length === 0 || isScanning) return;
-
-    let idleHandle: number | undefined;
-
-    const schedulePrefetch = () => {
-      const schedule =
-        typeof requestIdleCallback !== 'undefined'
-          ? (cb: () => void) => requestIdleCallback(cb, { timeout: 5000 }) as unknown as number
-          : (cb: () => void) => window.setTimeout(cb, 1000);
-
-      idleHandle = schedule(() => {
-        try {
-          // Pre-warm the next page of data by triggering a lightweight scan
-          // in the background. This ensures subsequent navigation is instant.
-          const nextPagePrefetch = async () => {
-            // Only prefetch if not already scanning
-            if (!document.hidden) {
-              runScan(activeStrategyId, capCategory).catch(() => {
-                // Prefetch is best-effort; ignore errors
-              });
-            }
-          };
-          nextPagePrefetch();
-        } catch {
-          // ignore prefetch errors
-        }
-      });
-    };
-
-    // Wait a brief moment after initial load before prefetching
-    const delayHandle = window.setTimeout(() => {
-      schedulePrefetch();
-    }, 3000);
-
-    return () => {
-      clearTimeout(delayHandle);
-      if (idleHandle) {
-        if (typeof cancelIdleCallback !== 'undefined') {
-          cancelIdleCallback(idleHandle);
-        } else {
-          clearTimeout(idleHandle);
-        }
-      }
-    };
-  }, [picks.length, isScanning, activeStrategyId, capCategory]);
+  // Prefetch-on-idle: disabled — was causing infinite loop by re-triggering on picks.length change
+    // useEffect(() => { ... }, [picks.length, isScanning, activeStrategyId, capCategory]);
 
   // Trigger initial scan when component mounts or strategy/cap changes
   useEffect(() => {
