@@ -24,6 +24,26 @@ try {
     </StrictMode>,
   );
   console.log('[main.tsx] Render call completed');
+  // Force a visible indicator that render completed
+  setTimeout(() => {
+    console.log('[main.tsx] Post-render check');
+    const mounted = document.getElementById('root')?.children?.length > 0;
+    console.log('[main.tsx] Root has children:', mounted);
+    if (!mounted) {
+      const el = document.getElementById('js-error');
+      if (el) {
+        el.style.display = 'block';
+        el.textContent = 'WARNING: React render completed but #root has no children!';
+      }
+    } else {
+      console.log('[main.tsx] SUCCESS: React mounted with', rootEl.children.length, 'child elements');
+      const banner = document.getElementById('js-status');
+      if (banner) {
+        banner.textContent = 'JS: module loaded + React mounted ✓';
+        banner.style.background = '#22c55e';
+      }
+    }
+  }, 100);
 } catch (e) {
   console.error('[main.tsx] RENDER ERROR:', e);
   const el = document.getElementById('js-error');
