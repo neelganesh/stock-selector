@@ -90,6 +90,10 @@ function DashboardContent() {
   } = useStrategy();
 
   const { user, profile, loading, signOut } = useAuth();
+
+  // Debug banner
+  const [debugInfo, setDebugInfo] = useState({ loading, user: !!user, picksLen: picks.length, isScanning });
+  useEffect(() => { setDebugInfo({ loading, user: !!user, picksLen: picks.length, isScanning }); }, [loading, user, picks.length, isScanning]);
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
 
@@ -100,6 +104,15 @@ function DashboardContent() {
           <div style={{ width: 32, height: 32, border: '3px solid var(--border-default)', borderTopColor: 'var(--accent-brand)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
           <span style={{ fontSize: 14 }}>Loading…</span>
         </div>
+      </div>
+    );
+  }
+
+  // Debug banner
+  if (debugInfo.loading || !debugInfo.user) {
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#22c55e', color: '#fff', padding: '8px', textAlign: 'center', zIndex: 9999, fontFamily: 'monospace', fontSize: '12px' }}>
+        DEBUG: loading={debugInfo.loading} user={debugInfo.user} picks={debugInfo.picksLen} scanning={debugInfo.isScanning}
       </div>
     );
   }
