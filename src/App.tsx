@@ -47,9 +47,20 @@ function DashboardContent() {
     progress,
   } = useStrategy();
 
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--ground)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)' }}>
+          <div style={{ width: 32, height: 32, border: '3px solid var(--border-default)', borderTopColor: 'var(--accent-brand)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 14 }}>Loading…</span>
+        </div>
+      </div>
+    );
+  }
 
   const [activeTab, setActiveTab] = useState<'signals' | 'settings'>('signals');
   const [currentPage, setCurrentPage] = useState(1);
