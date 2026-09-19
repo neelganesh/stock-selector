@@ -18,13 +18,26 @@
         </div>
       </div>
       <noscript>
-        <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0f1115;color:#e8eaed;font-family:system-ui,sans-serif;padding:20px;text-align:center;">
-          <div style="max-width:400px;">
-            <h2 style="color:#ef5350;margin-bottom:12px;">JavaScript Required</h2>
-            <p>This application requires JavaScript to run. Please enable JavaScript in your browser settings.</p>
-          </div>
-        </div>
-      </noscript>
-      <script type="module" src="/src/main.tsx"></script>
+              <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0f1115;color:#e8eaed;font-family:system-ui,sans-serif;padding:20px;text-align:center;">
+                <div style="max-width:400px;">
+                  <h2 style="color:#ef5350;margin-bottom:12px;">JavaScript Required</h2>
+                  <p>This application requires JavaScript to run. Please enable JavaScript in your browser settings.</p>
+                </div>
+              </div>
+            </noscript>
+            <div id="js-error" style="display:none;position:fixed;top:0;left:0;right:0;background:#ef5350;color:#fff;padding:16px;z-index:9999;font-family:monospace;font-size:12px;max-height:50vh;overflow:auto;"></div>
+            <script>
+              window.addEventListener('error', function(e) {
+                var el = document.getElementById('js-error');
+                el.style.display = 'block';
+                el.textContent += 'Error: ' + e.message + '\n' + (e.error?.stack || '') + '\n\n';
+              });
+              window.addEventListener('unhandledrejection', function(e) {
+                var el = document.getElementById('js-error');
+                el.style.display = 'block';
+                el.textContent += 'Unhandled Promise Rejection: ' + e.reason + '\n\n';
+              });
+            </script>
+            <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>
