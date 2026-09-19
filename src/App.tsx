@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component, ErrorInfo, ReactNode } from 'react';
+import { useState, useEffect, useRef, Component, ErrorInfo, ReactNode, useLayoutEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { StrategyProvider, useStrategy } from './context/StrategyContext';
 import { TierProvider } from './context/TierContext';
@@ -30,6 +30,19 @@ import type { StockPick } from './engine/types';
 
 
 const RESULTS_PER_PAGE = 12;
+
+// Simple mount indicator - renders a visible banner when React mounts
+function MountIndicator() {
+  useLayoutEffect(() => {
+    console.log('[MountIndicator] React app mounted');
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff7043;color:#fff;padding:8px;text-align:center;z-index:9999;font-size:12px;font-family:monospace;';
+    banner.textContent = '✅ React App Mounted Successfully';
+    document.body.appendChild(banner);
+    return () => banner.remove();
+  }, []);
+  return null;
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
   state = { hasError: false, error: null };
@@ -973,6 +986,7 @@ function DashboardContent() {
 export function App() {
   return (
     <ErrorBoundary>
+      <MountIndicator />
       <AuthProvider>
         <StrategyProvider>
           <TierProvider>
