@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { StrategyProvider, useStrategy } from './context/StrategyContext';
 import { TierProvider } from './context/TierContext';
@@ -30,6 +30,35 @@ import type { StockPick } from './engine/types';
 
 
 const RESULTS_PER_PAGE = 12;
+
+class ErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
+  state = { hasError: false, error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--ground)', padding: '20px', color: 'var(--text-primary)' }}>
+          <div style={{ textAlign: 'center', maxWidth: 500 }}>
+            <h2 style={{ color: 'var(--hazard-red)', marginBottom: '16px' }}>Application Error</h2>
+            <pre style={{ textAlign: 'left', background: 'var(--elevated-2)', padding: '16px', borderRadius: '8px', overflow: 'auto', fontSize: '12px', whiteSpace: 'pre-wrap' }}>
+              {this.state.error?.message}
+{this.state.error?.stack}
+            </pre>
+            <button onClick={() => window.location.reload()} style={{ marginTop: '16px', padding: '10px 20px', background: 'var(--accent-brand)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function DashboardContent() {
   const {
@@ -943,19 +972,21 @@ function DashboardContent() {
 
 export function App() {
   return (
-    <AuthProvider>
-      <StrategyProvider>
-        <TierProvider>
-        <ToastProvider>
-          <ThemeBootstrap />
-          <MobileBodyClass />
-          <UpgradeModal>
-            <DashboardContent />
-          </UpgradeModal>
-        </ToastProvider>
-        </TierProvider>
-      </StrategyProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <StrategyProvider>
+          <TierProvider>
+          <ToastProvider>
+            <ThemeBootstrap />
+            <MobileBodyClass />
+            <UpgradeModal>
+              <DashboardContent />
+            </UpgradeModal>
+          </ToastProvider>
+          </TierProvider>
+        </StrategyProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
