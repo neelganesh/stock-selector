@@ -36,6 +36,21 @@ function applyTheme(resolved: ResolvedTheme): void {
   document.documentElement.style.colorScheme = resolved;
 }
 
+// Synchronous initial theme application (runs at module load, before React renders)
+if (typeof window !== 'undefined') {
+  try {
+    const v = localStorage.getItem('theme');
+    const initialTheme = (v === 'light' || v === 'dark' || v === 'system') ? v : 'system';
+    const resolved = initialTheme === 'system' 
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : initialTheme;
+    document.documentElement.setAttribute('data-theme', resolved);
+    document.documentElement.style.colorScheme = resolved;
+  } catch {
+    // Ignore errors (private mode, etc.)
+  }
+}
+
 const THEME_CYCLE: ThemeMode[] = ['system', 'light', 'dark'];
 
 export interface UseThemeResult {
