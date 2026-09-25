@@ -31,7 +31,7 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes, server clock
+const CACHE_TTL_MS = 0; // Fresh refresh on every page load
 
 type ScanRow = {
   id: string;
@@ -239,3 +239,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: err?.message || 'Scan failed' });
   }
 }
+

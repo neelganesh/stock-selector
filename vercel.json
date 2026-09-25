@@ -7,11 +7,5 @@
   ],
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
-  "crons": [
-    {
-      "path": "/api/scan",
-      "schedule": "0 4 * * 1-5"
-    }
-  ]
+  "framework": "vite"
 }
