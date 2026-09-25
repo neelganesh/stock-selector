@@ -6,10 +6,7 @@
  *   Public (no auth) - read-only is enabled via RLS policy.
  *
  *   Response shape:
- *     { tickers: Array<{ symbol, company_name, sector, industry, cap_category }> }
- *
- * Performance: full universe is ~450 rows. With a 1-2 minute server cache
- *   the scanner's repeated calls during a session are essentially free.
+ *     { tickers: Array<{ symbol, company_name, sector, industry, cap_category, instrument_key }> }
  */
 
 import 'dotenv/config';
@@ -26,7 +23,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// In-memory cache (per serverless instance, lifetime = warm window)
 let cache: { data: any[]; ts: number } | null = null;
 const CACHE_TTL_MS = 60_000; // 60s
 
@@ -41,15 +37,13 @@ export default async function handler(
   const cap = (req.query.cap as string) || 'all';
 
   try {
-    // Serve from cache when fresh
     if (cache && Date.now() - cache.ts < CACHE_TTL_MS) {
       return res.json({ tickers: filterByCap(cache.data, cap) });
     }
 
-    // Otherwise reload
     const { data, error } = await supabaseAdmin
       .from('stock_universe')
-      .select('symbol, company_name, sector, industry, cap_category, source_list')
+      .select('symbol, company_name, sector, industry, cap_category, source_list, instrument_key')
       .order('cap_category', { ascending: true })
       .order('symbol', { ascending: true });
 

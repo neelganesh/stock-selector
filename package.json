@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "node scripts/dev-api.mjs",
-    "build": "vite build && esbuild api/_scan.ts --bundle --platform=node --format=esm --packages=external --outfile=api/scan.js",
+    "build": "vite build && esbuild api/_scan.ts --bundle --platform=node --format=esm --packages=external --outfile=api/scan.js && esbuild api/_candles.ts --bundle --platform=node --format=esm --packages=external --outfile=api/candles.js",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
@@ -54,4 +54,3 @@
     "esbuild@0.27.0": true
   }
 }
-

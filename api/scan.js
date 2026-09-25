@@ -497,14 +497,16 @@ async function fetchCandleData(instrumentKey) {
   if (res.status === 401) throw new UpstoxAuthError();
   if (!res.ok) throw new Error(`Upstox ${res.status} for ${instrumentKey}`);
   const json = await res.json();
-  const candles = json?.data?.candles ?? [];
-  if (candles.length < 20) throw new Error(`Insufficient candles for ${instrumentKey}`);
-  const closes = candles.map((c) => c[4]);
-  const volumes = candles.map((c) => c[5] ?? 0);
+  const rawCandles = json?.data?.candles ?? [];
+  if (rawCandles.length < 50) throw new Error(`Insufficient candles for ${instrumentKey}`);
+  const candles = [...rawCandles].reverse();
+  const closes = candles.map((c) => Number(c[4]));
+  const volumes = candles.map((c) => Number(c[5] ?? 0));
   const returns = closes.slice(1).map((c, i) => (c - closes[i]) / closes[i]);
-  const nav = [1];
-  for (const r of returns) nav.push(nav[nav.length - 1] * (1 + r * 0.7 + 1e-4));
-  nav.shift();
+  const nav = [100];
+  for (const r of returns) {
+    nav.push(Number((nav[nav.length - 1] * (1 + r * 0.7 + 1e-4)).toFixed(2)));
+  }
   return {
     prices: closes,
     volumeHistory: volumes,
@@ -512,41 +514,11 @@ async function fetchCandleData(instrumentKey) {
     dataSource: "Upstox"
   };
 }
-function generateFallbackCandles(seed) {
-  let s = seed || 1;
-  const rand = () => {
-    s = (s * 1103515245 + 12345) % 2147483648;
-    return s / 2147483648;
-  };
-  const prices = [];
-  const volumes = [];
-  let price = 100 + rand() * 900;
-  for (let i = 0; i < 260; i++) {
-    price *= 1 + (rand() - 0.48) * 0.03;
-    prices.push(Number(price.toFixed(2)));
-    volumes.push(Math.round(1e5 + rand() * 9e5));
-  }
-  const returns = prices.slice(1).map((c, i) => (c - prices[i]) / prices[i]);
-  const nav = [1];
-  for (const r of returns) nav.push(nav[nav.length - 1] * (1 + r * 0.7 + 1e-4));
-  nav.shift();
-  return { prices, volumeHistory: volumes, sectorNavHistory: nav, dataSource: "Fallback" };
-}
 
 // api/_scan.ts
 var SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 var SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
 var supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) : null;
-var CACHE_TTL_MS = 0;
-async function getCachedScan(id) {
-  if (!supabaseAdmin) return null;
-  const { data, error } = await supabaseAdmin.from("scan_results").select("*").eq("id", id).maybeSingle();
-  if (error) {
-    console.warn("[scan] cache read skipped:", error.message);
-    return null;
-  }
-  return data || null;
-}
 async function saveScan(row) {
   if (!supabaseAdmin) return;
   const { error } = await supabaseAdmin.from("scan_results").upsert(row);
@@ -569,38 +541,13 @@ function mapUniverse(rows) {
     instrumentKey: row.instrument_key
   }));
 }
-function loadSeedUniverse() {
-  return ["RELIANCE", "TATASTEEL", "INFY", "TATAMOTORS", "SUZLON", "BHEL"].map((symbol) => ({
-    symbol,
-    name: symbol,
-    sector: "Unknown",
-    industry: null,
-    capCategory: "large",
-    tradingSegment: "F&O Segment",
-    marketCapVal: 5e5,
-    volumeVal: 0,
-    prices: [],
-    volumeHistory: [],
-    sectorNavHistory: [],
-    dataSource: "pending",
-    instrumentKey: null
-  }));
-}
 async function loadUniverse() {
-  if (supabaseAdmin) {
-    const { data, error } = await supabaseAdmin.from("stock_universe").select("symbol, company_name, sector, industry, cap_category, instrument_key").order("cap_category", { ascending: true }).order("symbol", { ascending: true });
-    if (error) {
-      console.warn("[scan] universe with instrument_key failed:", error.message);
-      const retry = await supabaseAdmin.from("stock_universe").select("symbol, company_name, sector, industry, cap_category").order("cap_category", { ascending: true }).order("symbol", { ascending: true });
-      if (retry.error || !retry.data || retry.data.length === 0) {
-        console.warn("[scan] universe fallback to seed:", retry.error?.message);
-        return loadSeedUniverse();
-      }
-      return mapUniverse(retry.data.map((row) => ({ ...row, instrument_key: null })));
-    }
-    if (data && data.length > 0) return mapUniverse(data);
+  if (!supabaseAdmin) {
+    throw new Error("Supabase configuration missing");
   }
-  return loadSeedUniverse();
+  const { data, error } = await supabaseAdmin.from("stock_universe").select("symbol, company_name, sector, industry, cap_category, instrument_key").not("instrument_key", "is", null).order("cap_category", { ascending: true }).order("symbol", { ascending: true });
+  if (error) throw error;
+  return mapUniverse(data || []);
 }
 async function handler(req, res) {
   if (req.method !== "GET") {
@@ -608,59 +555,43 @@ async function handler(req, res) {
   }
   const strategyId = req.query.strategy || "zerodha-swing";
   const cap = req.query.cap || "all";
-  const force = req.query.force === "1";
   const rowId = `${strategyId}:${cap}`;
   const strategy = getStrategyById(strategyId);
   try {
-    if (!force) {
-      const cached = await getCachedScan(rowId);
-      if (cached && Date.now() - new Date(cached.updated_at).getTime() < CACHE_TTL_MS) {
-        return res.json({
-          picks: cached.picks,
-          updatedAt: cached.updated_at,
-          dataSource: cached.data_source,
-          cached: true
-        });
-      }
-    }
     const universe = (await loadUniverse()).filter(
       (s) => cap === "all" || s.capCategory === cap
     );
     let sawAuthError = false;
     let liveCount = 0;
     const picks = [];
-    for (const stock of universe) {
-      let data;
-      try {
-        if (stock.instrumentKey) {
-          data = await fetchCandleData(stock.instrumentKey);
-          liveCount++;
-        } else {
-          let h = 0;
-          for (const ch of stock.symbol) h = h * 31 + ch.charCodeAt(0) | 0;
-          data = generateFallbackCandles(Math.abs(h));
-        }
-      } catch (err) {
-        if (err instanceof UpstoxAuthError) {
-          sawAuthError = true;
-          data = generateFallbackCandles(1);
-        } else {
-          console.error(`[scan] ${stock.symbol}:`, err);
-          data = generateFallbackCandles(1);
-        }
-      }
-      stock.prices = data.prices;
-      stock.volumeHistory = data.volumeHistory;
-      stock.sectorNavHistory = data.sectorNavHistory;
-      stock.dataSource = data.dataSource;
-      try {
-        const pick = strategy.execute(stock);
-        if (pick) picks.push(pick);
-      } catch (err) {
-        console.error(`[scan] strategy error for ${stock.symbol}:`, err);
-      }
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < universe.length; i += CHUNK_SIZE) {
+      const chunk = universe.slice(i, i + CHUNK_SIZE);
+      await Promise.all(
+        chunk.map(async (stock) => {
+          if (!stock.instrumentKey) return;
+          try {
+            const data = await fetchCandleData(stock.instrumentKey);
+            stock.prices = data.prices;
+            stock.volumeHistory = data.volumeHistory;
+            stock.sectorNavHistory = data.sectorNavHistory;
+            stock.dataSource = data.dataSource;
+            liveCount++;
+            const pick = strategy.execute(stock);
+            if (pick) {
+              pick.dataSource = "Upstox";
+              picks.push(pick);
+            }
+          } catch (err) {
+            if (err instanceof UpstoxAuthError) {
+              sawAuthError = true;
+            }
+          }
+        })
+      );
+      if (sawAuthError) break;
     }
-    const dataSource = sawAuthError ? "Upstox (token expired)" : liveCount > 0 ? "Upstox" : "Fallback";
+    const dataSource = sawAuthError ? "Upstox (token expired)" : liveCount > 0 ? "Upstox" : "Upstox (no data)";
     const row = {
       id: rowId,
       strategy_id: strategyId,

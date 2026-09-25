@@ -50,6 +50,7 @@ function DashboardContent() {
     activeStrategy,
     picks,
     isScanning,
+    progress,
     lastUpdated,
     refetch,
     searchQuery,
@@ -235,7 +236,7 @@ function DashboardContent() {
                 className="absolute left-0 bottom-0 h-[2px] pointer-events-none"
                 style={{ backgroundColor: 'var(--accent-brand)' }}
                 initial={{ width: 0, opacity: 0 }}
-                animate={{ width: '100%', opacity: 1 }}
+                animate={{ width: `${progress.percent}%`, opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ width: { duration: 0.35, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 0.2 } }}
               />
@@ -470,7 +471,18 @@ function DashboardContent() {
 
             {/* Stock Cards */}
             <div className="space-y-4 pt-2">
-              {isScanning ? (
+              {isScanning && (
+                <div className="flex items-center justify-between pb-1 text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: "var(--accent-brand)" }} />
+                    Scanning stocks via Upstox ({progress.scanned} of {progress.total} - {progress.percent}%)...
+                  </span>
+                  {progress.currentSymbol && (
+                    <span className="font-mono text-[11px]" style={{ color: "var(--text-tertiary)" }}>{progress.currentSymbol}</span>
+                  )}
+                </div>
+              )}
+              {isScanning && picks.length === 0 ? (
                 <div
                   className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8"
                   role="status"

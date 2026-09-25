@@ -1,35 +1,8 @@
-/**
- * Minimal checks for the Upstox service (AGENTS.md: one runnable check).
- *
- * - generateFallbackCandles is deterministic per seed (api/scan.ts relies
- *   on this: a stock without an instrument key must always get the same
- *   synthetic series).
- * - fetchCandleData maps Upstox candles → CandleData contract and maps a
- *   401 to UpstoxAuthError.
- */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   fetchCandleData,
-  generateFallbackCandles,
   UpstoxAuthError,
 } from '../upstoxService';
-
-describe('generateFallbackCandles', () => {
-  it('is deterministic for the same seed', () => {
-    const a = generateFallbackCandles(12345);
-    const b = generateFallbackCandles(12345);
-    expect(a.prices).toEqual(b.prices);
-    expect(a.volumeHistory).toEqual(b.volumeHistory);
-  });
-
-  it('produces the contract shape: 260 candles with nav one-per-return', () => {
-    const d = generateFallbackCandles(7);
-    expect(d.prices).toHaveLength(260);
-    expect(d.volumeHistory).toHaveLength(260);
-    expect(d.sectorNavHistory).toHaveLength(259);
-    expect(d.dataSource).toBe('Fallback');
-  });
-});
 
 describe('fetchCandleData', () => {
   afterEach(() => {
@@ -48,14 +21,28 @@ describe('fetchCandleData', () => {
     );
   });
 
-  it('maps Upstox candles to closes/volumes/nav', async () => {
+  it('throws on insufficient candles', async () => {
     vi.stubEnv('UPSTOX_ACCESS_TOKEN', 'test-token');
-    const candles = Array.from({ length: 25 }, (_, i) => [
-      `2025-01-${String(i + 1).padStart(2, '0')}`,
-      100 + i,
-      105 + i,
-      95 + i,
-      101 + i,
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { candles: [[1, 2, 3, 4, 5, 6, 7]] } }),
+      } as any)
+    );
+    await expect(fetchCandleData('NSE_EQ|INE002A01018')).rejects.toThrow('Insufficient candles');
+  });
+
+  it('reverses descending Upstox candles to chronological order (oldest first)', async () => {
+    vi.stubEnv('UPSTOX_ACCESS_TOKEN', 'test-token');
+    // Descending from Upstox: [0] is newest (55), [59] is oldest (100)
+    const candles = Array.from({ length: 60 }, (_, i) => [
+      `2026-09-${String(60 - i).padStart(2, '0')}`,
+      100 - i,
+      105 - i,
+      95 - i,
+      100 - i, // close
       1000 + i,
       0,
     ]);
@@ -68,9 +55,12 @@ describe('fetchCandleData', () => {
       } as any)
     );
     const d = await fetchCandleData('NSE_EQ|INE002A01018');
-    expect(d.prices).toEqual(candles.map((c) => c[4]));
-    expect(d.volumeHistory).toEqual(candles.map((c) => c[5]));
-    expect(d.sectorNavHistory).toHaveLength(24);
+    // Prices must be chronological (oldest first): 100 - 59 = 41 up to 100 - 0 = 100
+    expect(d.prices[0]).toBe(41);
+    expect(d.prices[d.prices.length - 1]).toBe(100);
+    expect(d.prices).toHaveLength(60);
+    expect(d.volumeHistory).toHaveLength(60);
+    expect(d.sectorNavHistory).toHaveLength(60);
     expect(d.dataSource).toBe('Upstox');
   });
 });

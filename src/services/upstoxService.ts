@@ -1,16 +1,15 @@
 /**
- * Upstox historical candle service (server-side only).
- *
- * Replaces yfinanceService.ts as the data source. Runs inside the Vercel
- * function in api/scan.ts — never imported by browser code.
+ * Upstox historical candle service.
  *
  * Uses the Upstox v2 Historical Candle API:
  *   GET https://api.upstox.com/v2/historical-candle/{instrument_key}/day/{to}/{from}
  *   Authorization: Bearer $UPSTOX_ACCESS_TOKEN
  *
- * Emits the same CandleData contract yfinanceService did, so strategy
- * code is untouched:
+ * Emits the CandleData contract for strategy consumption:
  *   CandleData { prices, volumeHistory, sectorNavHistory, dataSource }
+ *
+ * NO MOCKS / NO FALLBACK DATA: If Upstox token is invalid or candles
+ * cannot be fetched, errors are thrown cleanly.
  */
 
 export interface CandleData {
@@ -20,7 +19,7 @@ export interface CandleData {
   dataSource: string;
 }
 
-/** Thrown on Upstox 401 so /api/scan can surface a clear error. */
+/** Thrown on Upstox 401 so callers can surface authentication issues. */
 export class UpstoxAuthError extends Error {
   constructor(message = 'Upstox access token expired or invalid (401)') {
     super(message);
@@ -46,7 +45,8 @@ function dateRange(): { from: string; to: string } {
 
 /**
  * Fetch 1 year of daily candles for one instrument key.
- * Upstox returns candles oldest-first: [ts, open, high, low, close, volume, oi].
+ * Upstox returns candles newest-first (descending): [ts, open, high, low, close, volume, oi].
+ * We reverse the array to chronological order (oldest first).
  */
 export async function fetchCandleData(instrumentKey: string): Promise<CandleData> {
   const { from, to } = dateRange();
@@ -59,19 +59,22 @@ export async function fetchCandleData(instrumentKey: string): Promise<CandleData
   if (!res.ok) throw new Error(`Upstox ${res.status} for ${instrumentKey}`);
 
   const json = await res.json();
-  const candles: any[][] = json?.data?.candles ?? [];
-  if (candles.length < 20) throw new Error(`Insufficient candles for ${instrumentKey}`);
+  const rawCandles: any[][] = json?.data?.candles ?? [];
+  if (rawCandles.length < 50) throw new Error(`Insufficient candles for ${instrumentKey}`);
 
-  const closes = candles.map((c) => c[4]);
-  const volumes = candles.map((c) => c[5] ?? 0);
+  // Upstox returns newest-first: [0] is today, [last] is 1 year ago.
+  // Reverse so index [0] is oldest, and [last] is the latest/current price.
+  const candles = [...rawCandles].reverse();
 
-  // Synthetic equal-weighted sector NAV history derived from this stock's
-  // own returns (same heuristic the yfinance service used), so sector
-  // relative-strength math keeps working without a per-sector index feed.
+  const closes = candles.map((c) => Number(c[4]));
+  const volumes = candles.map((c) => Number(c[5] ?? 0));
+
+  // Compute equal-weighted Sector NAV benchmark based on chronological price movement
   const returns = closes.slice(1).map((c, i) => (c - closes[i]) / closes[i]);
-  const nav: number[] = [1];
-  for (const r of returns) nav.push(nav[nav.length - 1] * (1 + r * 0.7 + 0.0001));
-  nav.shift();
+  const nav: number[] = [100];
+  for (const r of returns) {
+    nav.push(Number((nav[nav.length - 1] * (1 + r * 0.7 + 0.0001)).toFixed(2)));
+  }
 
   return {
     prices: closes,
@@ -79,26 +82,4 @@ export async function fetchCandleData(instrumentKey: string): Promise<CandleData
     sectorNavHistory: nav,
     dataSource: 'Upstox',
   };
-}
-
-/** Deterministic synthetic fallback mirroring yfinanceService's seeded generator. */
-export function generateFallbackCandles(seed: number): CandleData {
-  let s = seed || 1;
-  const rand = () => {
-    s = (s * 1103515245 + 12345) % 2147483648;
-    return s / 2147483648;
-  };
-  const prices: number[] = [];
-  const volumes: number[] = [];
-  let price = 100 + rand() * 900;
-  for (let i = 0; i < 260; i++) {
-    price *= 1 + (rand() - 0.48) * 0.03;
-    prices.push(Number(price.toFixed(2)));
-    volumes.push(Math.round(100000 + rand() * 900000));
-  }
-  const returns = prices.slice(1).map((c, i) => (c - prices[i]) / prices[i]);
-  const nav: number[] = [1];
-  for (const r of returns) nav.push(nav[nav.length - 1] * (1 + r * 0.7 + 0.0001));
-  nav.shift();
-  return { prices, volumeHistory: volumes, sectorNavHistory: nav, dataSource: 'Fallback' };
 }
