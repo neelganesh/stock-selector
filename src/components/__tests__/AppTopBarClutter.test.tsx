@@ -1,52 +1,35 @@
 /**
- * Top bar de-clutter regression test.
+ * Public-app top bar regression test.
  *
- * Bug: The dashboard top bar had two adjacent buttons that opened the
- * same Zerodha login modal:
- *   - "Data Source: yfinance (Fallback)" / "Kite API (Live)" pill
- *   - A standalone "Connect Zerodha" pill
- * The standalone "Connect Zerodha" button is redundant once Kite is
- * connected (data-source pill already opens the modal). Showing both
- * clutters the top bar with two pills doing the same job.
- *
- * Contract: when activeDataSource is 'Zerodha Kite API (Live)', the
- * standalone "Connect Zerodha" button MUST be hidden (the data-source
- * pill already shows the connection state and opens the modal on click).
+ * Contract after the public-app refactor:
+ *   - No "Sign in" UI, no Kite / Zerodha buttons, no Settings tab.
+ *   - Top bar shows an "Upstox" data-source pill with last-updated time
+ *     and a "Refetch" button that triggers `refetch()`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 vi.mock('../../lib/supabase', () => ({
   supabase: null,
 }));
 
-vi.mock('../AuthProvider', () => ({
-  AuthProvider: ({ children }: { children: any }) => children,
-  useAuth: () => ({
-    user: null,
-    profile: null,
-    loading: false,
-    signIn: vi.fn(),
-    signUp: vi.fn(),
-    signOut: vi.fn(),
-    refreshProfile: vi.fn(),
-    getAccessToken: vi.fn().mockResolvedValue(null),
-  }),
-}));
-
-const { mockStrategyState } = vi.hoisted(() => ({
-  mockStrategyState: {
-    activeDataSource: 'yfinance (Fallback)' as 'Zerodha Kite API (Live)' | 'yfinance (Fallback)',
-  },
-}));
+const mockRefetch = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../context/StrategyContext', () => ({
   StrategyProvider: ({ children }: { children: any }) => children,
   useStrategy: () => ({
-    activeStrategy: { id: 's1', name: 'Zerodha Swing Strategy', description: '', rules: [] },
+    strategies: [
+      { id: 'zerodha-swing', name: 'Swing Strategy', description: '', rules: [] },
+    ],
+    activeStrategy: { id: 'zerodha-swing', name: 'Swing Strategy', description: '', rules: [] },
+    activeStrategyId: 'zerodha-swing',
+    setActiveStrategyId: vi.fn(),
     capCategory: 'all',
+    setCapCategory: vi.fn(),
     picks: [],
     isScanning: false,
+    lastUpdated: '2026-01-01T10:00:00.000Z',
+    refetch: mockRefetch,
     searchQuery: '',
     setSearchQuery: vi.fn(),
     signalFilter: 'all',
@@ -55,33 +38,8 @@ vi.mock('../../context/StrategyContext', () => ({
     setSortBy: vi.fn(),
     resultCapFilter: 'all',
     setResultCapFilter: vi.fn(),
-    activeDataSource: mockStrategyState.activeDataSource,
-    setActiveDataSource: vi.fn(),
-    isZerodhaModalOpen: false,
-    setIsZerodhaModalOpen: vi.fn(),
-    runScan: vi.fn(),
-    strategies: [],
-    activeStrategyId: 's1',
-    setActiveStrategyId: vi.fn(),
-    setCapCategory: vi.fn(),
-    progress: { scanned: 0, total: 0, currentSymbol: '', status: 'idle', percent: 0 },
-    customScripList: [],
-    setCustomScripList: vi.fn(),
   }),
 }));
-vi.mock('../UpgradeModal', () => ({ UpgradeModal: ({ children }: { children: any }) => children }));
-vi.mock('../../context/TierContext', () => ({
-  TierProvider: ({ children }: { children: any }) => children,
-  useTier: () => ({
-    tier: 'free',
-    tierConfig: { label: 'Free', priceMonthly: null, priceINR: null, features: [], maxStrategies: 3 },
-    loading: false,
-    isPro: false,
-    upgradeToPro: vi.fn(),
-    refreshTier: vi.fn(),
-  }),
-}));
-
 
 globalThis.fetch = vi.fn().mockResolvedValue({
   ok: false,
@@ -89,15 +47,9 @@ globalThis.fetch = vi.fn().mockResolvedValue({
   json: async () => ({}),
 } as any);
 
-vi.mock('../../components/ZerodhaStatusButton', () => ({
-  ZerodhaStatusButton: ({ onNavigateToProfile }: { onNavigateToProfile: () => void }) => {
-    return null;
-  },
-}));
-
 import App from '../../App';
 
-describe('App.tsx top bar de-clutter', () => {
+describe('App.tsx public top bar', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -105,20 +57,28 @@ describe('App.tsx top bar de-clutter', () => {
 
   afterEach(() => {
     cleanup();
-    mockStrategyState.activeDataSource = 'yfinance (Fallback)';
   });
 
-  it('hides "Connect Zerodha" pill when Kite is live (data-source pill is sufficient)', async () => {
-    mockStrategyState.activeDataSource = 'Zerodha Kite API (Live)';
+  it('shows the Refetch button and the Upstox pill', async () => {
     render(<App />);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(screen.queryByRole('button', { name: /connect zerodha/i })).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.getByRole('button', { name: /refetch/i })).toBeTruthy();
+    expect(screen.getByText(/upstox/i)).toBeTruthy();
   });
 
-  it('shows "Sign in" button when not connected to Kite (yfinance fallback)', async () => {
-    mockStrategyState.activeDataSource = 'yfinance (Fallback)';
+  it('calls refetch() when the Refetch button is clicked', async () => {
     render(<App />);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    fireEvent.click(screen.getByRole('button', { name: /refetch/i }));
+    expect(mockRefetch).toHaveBeenCalled();
+  });
+
+  it('has no Sign in button and no Kite / Settings UI', async () => {
+    render(<App />);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByRole('button', { name: /sign in/i })).toBeNull();
+    expect(screen.queryByText(/zerodha/i)).toBeNull();
+    expect(screen.queryByText(/kite/i)).toBeNull();
+    expect(screen.queryByText(/settings/i)).toBeNull();
   });
 });

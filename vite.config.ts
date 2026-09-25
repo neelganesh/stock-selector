@@ -7,29 +7,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      // List specific proxies FIRST (Vite matches the first entry that
-      // matches the path; more specific paths must be checked first).
-      '/api/yahoo1': {
-        target: 'https://query1.finance.yahoo.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/yahoo1/, ''),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-        },
-      },
-      '/api/yahoo2': {
-        target: 'https://query2.finance.yahoo.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/yahoo2/, ''),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-        },
-      },
-      // Catch-all: proxy every other /api/* to the local Vercel dev server
+      // /api/* proxies to the local Vercel dev server (`npm run dev:api`),
+      // which serves api/*.ts functions. Plain `vite` without it 404s on /api.
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3100',
         changeOrigin: true,
         secure: false,
       },

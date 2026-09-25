@@ -1,10 +1,7 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import type { CapCategory, StockPick, StrategyDefinition, ScanProgress } from '../engine/types';
+import type { CapCategory, StockPick, StrategyDefinition } from '../engine/types';
 import { ALL_STRATEGIES, getStrategyById } from '../engine/strategies';
-import { runParallelStockScan } from '../engine/scannerEngine';
-
-export type DataSourceType = 'yfinance';
 
 export type SortOption =
   | 'rank'
@@ -18,25 +15,23 @@ export type SortOption =
 
 export type ResultCapFilter = 'all' | 'large' | 'mid' | 'small';
 
-const SESSION_STORAGE_PICKS_KEY = 'stock_selector_picks';
-
 interface StrategyContextType {
   strategies: StrategyDefinition[];
   activeStrategyId: string;
   setActiveStrategyId: (id: string) => void;
   activeStrategy: StrategyDefinition;
-  
+
   capCategory: CapCategory;
   setCapCategory: (cap: CapCategory) => void;
 
   picks: StockPick[];
   isScanning: boolean;
-  progress: ScanProgress;
-  runScan: (strategyId?: string, cap?: CapCategory) => Promise<void>;
-  
+  lastUpdated: string | null;
+  refetch: () => Promise<void>;
+
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  
+
   signalFilter: 'all' | 'strong-buy' | 'buy' | 'hold';
   setSignalFilter: (filter: 'all' | 'strong-buy' | 'buy' | 'hold') => void;
 
@@ -45,11 +40,6 @@ interface StrategyContextType {
 
   resultCapFilter: ResultCapFilter;
   setResultCapFilter: (filter: ResultCapFilter) => void;
-
-  activeDataSource: DataSourceType;
-  setActiveDataSource: (source: DataSourceType) => void;
-  customScripList: string[];
-  setCustomScripList: (scrips: string[]) => void;
 }
 
 const StrategyContext = createContext<StrategyContextType | null>(null);
@@ -57,101 +47,59 @@ const StrategyContext = createContext<StrategyContextType | null>(null);
 export function StrategyProvider({ children }: { children: ReactNode }) {
   const [strategies] = useState<StrategyDefinition[]>(ALL_STRATEGIES);
   const [activeStrategyId, setActiveStrategyIdState] = useState<string>(
-    ALL_STRATEGIES[0].id // Zerodha Swing Strategy is 1st
+    ALL_STRATEGIES[0].id // Swing Strategy is 1st
   );
   const [capCategory, setCapCategoryState] = useState<CapCategory>('all');
-  const [picks, setPicks] = useState<StockPick[]>(() => {
-    // Hydrate picks from sessionStorage for instant refresh within session
-    // Checks 2-minute TTL — expired entries are ignored
-    try {
-      const raw = sessionStorage.getItem(SESSION_STORAGE_PICKS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const age = Date.now() - (parsed.timestamp ?? 0);
-        const ttl = parsed.ttl ?? 2 * 60 * 1000;
-        if (age < ttl && Array.isArray(parsed.picks) && parsed.picks.length > 0) {
-          return parsed.picks;
-        }
-      }
-    } catch {
-      // ignore corrupt data
-    }
-    return [];
-  });
+  const [picks, setPicks] = useState<StockPick[]>([]);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [progress, setProgress] = useState<ScanProgress>({
-    scanned: 0,
-    total: 0,
-    currentSymbol: '',
-    status: 'idle',
-    percent: 0,
-  });
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [signalFilter, setSignalFilter] = useState<'all' | 'strong-buy' | 'buy' | 'hold'>('all');
   const [sortBy, setSortBy] = useState<SortOption>('rank');
   const [resultCapFilter, setResultCapFilter] = useState<ResultCapFilter>('all');
 
-  const [activeDataSource, setActiveDataSource] = useState<DataSourceType>('yfinance');
-  const [customScripList, setCustomScripList] = useState<string[]>([]);
-
-
   const activeStrategy = getStrategyById(activeStrategyId);
 
+  /**
+   * The scan runs server-side (/api/scan). The browser only reads results;
+   * `force` bypasses the server's 15-minute cache (refetch button).
+   */
   const runScan = useCallback(
-    async (strategyIdToUse?: string, capToUse?: CapCategory) => {
-      const currentStrategy = getStrategyById(strategyIdToUse || activeStrategyId);
+    async (strategyIdToUse?: string, capToUse?: CapCategory, force = false) => {
+      const sid = strategyIdToUse || activeStrategyId;
       const targetCap = capToUse || capCategory;
 
       setIsScanning(true);
-
       try {
-        const { picks: results, activeDataSource: source } = await runParallelStockScan({
-          strategy: currentStrategy,
-          capCategory: targetCap,
-          customScrips: customScripList,
-          onProgress: (p) => {
-            setProgress(p);
-          },
-          onDataSourceDetermined: (source) => {
-            setActiveDataSource(source);
-          },
-        });
-        setPicks(results);
-        setActiveDataSource(source);
+        const params = new URLSearchParams({ strategy: sid, cap: targetCap });
+        if (force) params.set('force', '1');
+        const res = await fetch(`/api/scan?${params}`);
+        if (!res.ok) throw new Error(`Scan API ${res.status}`);
+        const json = await res.json();
+        setPicks(json.picks ?? []);
+        setLastUpdated(json.updatedAt ?? null);
       } catch (err) {
         console.error('Scan error:', err);
       } finally {
         setIsScanning(false);
       }
     },
-    [activeStrategyId, capCategory, customScripList]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeStrategyId, capCategory]
   );
 
-  // Persist picks to sessionStorage whenever they change (enables instant refresh)
-  // Uses 2-minute TTL so cached signals expire and refresh on back-navigation
-  useEffect(() => {
-    try {
-      if (picks.length > 0) {
-        const cacheEntry = {
-          picks,
-          timestamp: Date.now(),
-          ttl: 2 * 60 * 1000, // 2 minutes in milliseconds
-        };
-        sessionStorage.setItem(SESSION_STORAGE_PICKS_KEY, JSON.stringify(cacheEntry));
-      }
-    } catch {
-      // sessionStorage may be unavailable
-    }
-  }, [picks]);
+  const refetch = useCallback(() => runScan(undefined, undefined, true), [runScan]);
 
-  // Prefetch-on-idle: disabled — was causing infinite loop by re-triggering on picks.length change
-    // useEffect(() => { ... }, [picks.length, isScanning, activeStrategyId, capCategory]);
-
-  // Trigger initial scan when component mounts or strategy/cap changes
+  // Trigger scan on mount and when strategy/cap changes.
+  const prevScanKeyRef = useRef<string | null>(null);
   useEffect(() => {
+    const key = `${activeStrategyId}__${capCategory}`;
+    if (prevScanKeyRef.current === key) return; // no change — skip
+    prevScanKeyRef.current = key;
     runScan(activeStrategyId, capCategory);
-  }, [activeStrategyId, capCategory, runScan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStrategyId, capCategory]); // runScan intentionally omitted — stable enough
 
   const setActiveStrategyId = (id: string) => {
     setActiveStrategyIdState(id);
@@ -172,8 +120,8 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
         setCapCategory,
         picks,
         isScanning,
-        progress,
-        runScan,
+        lastUpdated,
+        refetch,
         searchQuery,
         setSearchQuery,
         signalFilter,
@@ -182,10 +130,6 @@ export function StrategyProvider({ children }: { children: ReactNode }) {
         setSortBy,
         resultCapFilter,
         setResultCapFilter,
-        activeDataSource,
-        setActiveDataSource,
-        customScripList,
-        setCustomScripList,
       }}
     >
       {children}

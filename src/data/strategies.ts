@@ -31,11 +31,11 @@ export interface Strategy {
   status: 'active' | 'paused' | 'error';
 }
 
-// Mock data for Zerodha Swing Strategy placeholder
+// Mock data for Swing Strategy placeholder
 export const mockStrategies: Strategy[] = [
   {
     id: 'zerodha-swing',
-    name: 'Zerodha Swing Strategy',
+    name: 'Swing Strategy',
     description: 'Swing trading signals based on technical analysis and momentum indicators. Identifies potential breakouts and trend continuations.',
     status: 'active',
     lastRun: new Date(),

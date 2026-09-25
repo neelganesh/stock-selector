@@ -5,7 +5,7 @@ import { SuperTrendRiderStrategy } from './SuperTrendRiderStrategy';
 
 /**
  * Strategy Registry
- * Zerodha Swing Strategy is listed 1st as requested by the user.
+ * Swing Strategy is listed 1st as requested by the user.
  * Additional strategies can be added here easily as pluggable modules.
  */
 export const ALL_STRATEGIES: StrategyDefinition[] = [

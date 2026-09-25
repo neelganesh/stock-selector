@@ -11,6 +11,7 @@ const supabasePublishableKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
   import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+
 if (!supabaseUrl || !supabasePublishableKey) {
   console.warn('[Supabase] Credentials not configured. Auth and database features will be disabled.', { supabaseUrl, hasKey: !!supabasePublishableKey });
 } else {

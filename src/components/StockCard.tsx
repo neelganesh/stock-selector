@@ -4,7 +4,6 @@ import { GlassCard } from './GlassCard';
 import { AnimatedNumber } from './AnimatedNumber';
 import { SignalBadge } from './SignalBadge';
 import { InfoTooltip } from './InfoTooltip';
-import { Icon } from './Icon';
 import type { StockPick } from '../engine/types';
 
 const LOGO_DEV_KEY = 'pk_SGz4DyGzSNKkmEabGKmhjg';
@@ -28,9 +27,6 @@ function CompanyLogo({ ticker, size = 28 }: { ticker: string; size?: number }) {
 interface StockCardProps {
   stock: StockPick;
   index?: number;
-  onOpenExecuteModal?: (stock: StockPick) => void;
-  onExecuteInKite?: (stock: StockPick) => void;
-  isLoggedIn?: boolean;
 }
 
 const formatPrice = (value: number) => {
@@ -74,13 +70,28 @@ const displayValue = (value: string | undefined | null) =>
  * boxes around icons or chevrons. Symbol monogram is a font. Padding,
  * font-size, and icon size all scale via cqi.
  */
-export default function StockCard({ stock, index, onOpenExecuteModal, onExecuteInKite, isLoggedIn }: StockCardProps) {
+export default function StockCard({ stock, index }: StockCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isPositive = stock.change >= 0;
   const prefersReducedMotion = useReducedMotion();
 
-  // Guard against missing signalDetails — show empty card until data loads
   const sd = stock.signalDetails;
+  // Keep this hook unconditional: signalDetails can be absent during loading.
+  const { currentPos, target1Pos, stopLossPos, entryPos } = useMemo(() => {
+    if (!sd) return { currentPos: 0, target1Pos: 0, stopLossPos: 0, entryPos: 0 };
+    const min = Math.min(sd.stopLoss, stock.currentPrice) * 0.98;
+    const max = Math.max(sd.target2 || sd.target1, stock.currentPrice) * 1.02;
+    const range = max - min;
+    const pos = (val: number) => Math.min(100, Math.max(0, ((val - min) / range) * 100));
+    return {
+      stopLossPos: pos(sd.stopLoss),
+      currentPos: pos(stock.currentPrice),
+      target1Pos: pos(sd.target1),
+      entryPos: pos(sd.entry),
+    };
+  }, [sd, stock.currentPrice]);
+
+  // Guard against missing signalDetails — show empty card until data loads.
   if (!sd) {
     return (
       <GlassCard variant="default" padding="lg">
@@ -97,19 +108,6 @@ export default function StockCard({ stock, index, onOpenExecuteModal, onExecuteI
   const reward = Math.max(0.1, sd.target1 - sd.entry);
   const rrRatio = (reward / risk).toFixed(2);
   const upsidePercent = ((sd.target1 - stock.currentPrice) / stock.currentPrice) * 100;
-
-  const { currentPos, target1Pos, stopLossPos, entryPos } = useMemo(() => {
-    const min = Math.min(sd.stopLoss, stock.currentPrice) * 0.98;
-    const max = Math.max(sd.target2 || sd.target1, stock.currentPrice) * 1.02;
-    const range = max - min;
-    const pos = (val: number) => Math.min(100, Math.max(0, ((val - min) / range) * 100));
-    return {
-      stopLossPos: pos(sd.stopLoss),
-      currentPos: pos(stock.currentPrice),
-      target1Pos: pos(sd.target1),
-      entryPos: pos(sd.entry),
-    };
-  }, [sd, stock.currentPrice]);
 
   const renkoInfo = sd.indicators?.renko;
 
@@ -312,29 +310,6 @@ export default function StockCard({ stock, index, onOpenExecuteModal, onExecuteI
           </div>
         )}
 
-        {/* Action bar — always visible on every signal card */}
-        {isLoggedIn && onExecuteInKite && (
-          <div className="bg-white border-t border-[color:var(--border-subtle)] p-2">
-            <div className="grid grid-cols-1">
-              {onExecuteInKite && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onExecuteInKite(stock);
-                  }}
-                  className="py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-90"
-                  style={{ backgroundColor: '#16a34a', color: '#fff', fontSize: 'clamp(10px, 2.4cqi, 12px)' }}
-                >
-                  <Icon name="external-link" size={14} strokeWidth={2.5} />
-                  <span className="hidden sm:inline">Execute in Kite</span>
-                  <span className="sm:hidden">Kite</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* EXPANDED DETAIL — animation reveals below the always-visible header */}
         <AnimatePresence initial={false}>
           {isExpanded && (
@@ -433,51 +408,6 @@ export default function StockCard({ stock, index, onOpenExecuteModal, onExecuteI
                   </p>
                 </div>
 
-                {/* Action bar — visible without expanding */}
-                <div className="bg-white border-t border-[color:var(--border-subtle)]">
-                  <div className="pt-1">
-                    {isLoggedIn && onExecuteInKite && (
-                      <>
-                        <div className="grid grid-cols-1">
-                          {onExecuteInKite && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onExecuteInKite(stock);
-                              }}
-                              className="py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] hover:opacity-90"
-                              style={{
-                                backgroundColor: '#16a34a',
-                                color: '#fff',
-                                fontSize: 'clamp(10px, 2.4cqi, 12px)',
-                              }}
-                            >
-                              <Icon name="external-link" size={14} strokeWidth={2.5} />
-                              <span className="hidden sm:inline">Execute in Kite</span>
-                              <span className="sm:hidden">Kite</span>
-                            </button>
-                          )}
-                          {onOpenExecuteModal && !onExecuteInKite && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenExecuteModal(stock);
-                              }}
-                              className="col-span-2 py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                backgroundColor: 'var(--accent-blue)',
-                                color: 'var(--accent-fg)',
-                                fontSize: 'clamp(11px, 2.8cqi, 13px)',
-                              }}
-                            >
-                              <Icon name="arrow-right" size={16} strokeWidth={2.5} />
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
               </div>
             </motion.div>
           )}
@@ -488,6 +418,8 @@ export default function StockCard({ stock, index, onOpenExecuteModal, onExecuteI
 }
 
 function LadderRow({
+  label,
+  markerPos,
   markerColor,
   value,
 }: {

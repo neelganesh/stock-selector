@@ -10,7 +10,7 @@ import {
 } from '../indicators';
 
 /**
- * 1. Zerodha Swing Strategy (Wagner & Pedicelli Method)
+ * 1. Swing Strategy (Wagner & Pedicelli Method)
  * Rules:
  * - Equal-Weighted Sector NAV outperformers (Stock versus NAV > 0%)
  * - Daily EMA Alignment (20 EMA > 50 EMA)
@@ -20,8 +20,8 @@ import {
  */
 export const ZerodhaSwingStrategy: StrategyDefinition = {
   id: 'zerodha-swing',
-  name: 'Zerodha Swing Strategy',
-  shortName: 'Zerodha Swing',
+  name: 'Swing Strategy',
+  shortName: 'Swing',
   category: 'Sector Relative Strength',
   description:
     'Grounded in the Wagner & Pedicelli method: identifies the strongest stocks outperforming their equal-weighted sector NAV with 20/50 EMA alignment and Renko price-only breakout confirmation.',

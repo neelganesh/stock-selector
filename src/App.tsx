@@ -1,48 +1,20 @@
-import { useState, useEffect, useRef, Component, ErrorInfo, ReactNode, useLayoutEffect } from 'react';
+import { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { StrategyProvider, useStrategy } from './context/StrategyContext';
-import { TierProvider } from './context/TierContext';
-import { UpgradeModal } from './components/UpgradeModal';
 import { Sidebar } from './components/Sidebar';
 import { MobileSidebarDrawer } from './components/MobileSidebarDrawer';
 import { MobileBodyClass } from './components/MobileBodyClass';
 import StockCard from './components/StockCard';
 import { ExpandableCard } from './components/ExpandableCard';
-import { ExecuteModal } from './components/ExecuteModal';
 import { ToastProvider } from './components/ToastProvider';
 import { useToast } from './components/useToast';
-import { MobileNav, type MobileNavTab } from './components/MobileNav';
-import { AuthProvider, useAuth } from './components/AuthProvider';
-import { useTier } from './context/TierContext';
-import { AuthPage } from './components/AuthPage';
-import { SettingsPage } from './components/SettingsPage';
 import { Pagination } from './components/Pagination';
 import { InfoTooltip } from './components/InfoTooltip';
 import { Icon } from './components/Icon';
 import { AnimatedNumber } from './components/AnimatedNumber';
-import { GlassCard } from './components/GlassCard';
-import { ZerodhaStatusButton } from './components/ZerodhaStatusButton';
-
 import { useTheme } from './hooks/useTheme';
-import { authFetch } from './lib/authFetch';
-import { placeOrder } from './services/kitePublisher';
-import type { StockPick } from './engine/types';
-
 
 const RESULTS_PER_PAGE = 12;
-
-// Simple mount indicator - renders a visible banner when React mounts
-function MountIndicator() {
-  useLayoutEffect(() => {
-    console.log('[MountIndicator] React app mounted');
-    const banner = document.createElement('div');
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff7043;color:#fff;padding:8px;text-align:center;z-index:9999;font-size:12px;font-family:monospace;';
-    banner.textContent = '✅ React App Mounted Successfully';
-    document.body.appendChild(banner);
-    return () => banner.remove();
-  }, []);
-  return null;
-}
 
 class ErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error: Error | null }> {
   state = { hasError: false, error: null };
@@ -78,6 +50,8 @@ function DashboardContent() {
     activeStrategy,
     picks,
     isScanning,
+    lastUpdated,
+    refetch,
     searchQuery,
     setSearchQuery,
     signalFilter,
@@ -86,235 +60,30 @@ function DashboardContent() {
     setSortBy,
     resultCapFilter,
     setResultCapFilter,
-    progress,
   } = useStrategy();
 
-  const { user, profile, loading, signOut } = useAuth();
-
-  // Debug banner
-  const [debugInfo, setDebugInfo] = useState({ loading, user: !!user, picksLen: picks.length, isScanning });
-  useEffect(() => { setDebugInfo({ loading, user: !!user, picksLen: picks.length, isScanning }); }, [loading, user, picks.length, isScanning]);
   const toast = useToast();
   const prefersReducedMotion = useReducedMotion();
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--ground)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)' }}>
-          <div style={{ width: 32, height: 32, border: '3px solid var(--border-default)', borderTopColor: 'var(--accent-brand)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-          <span style={{ fontSize: 14 }}>Loading…</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Debug banner
-  if (debugInfo.loading || !debugInfo.user) {
-    return (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#22c55e', color: '#fff', padding: '8px', textAlign: 'center', zIndex: 9999, fontFamily: 'monospace', fontSize: '12px' }}>
-        DEBUG: loading={debugInfo.loading} user={debugInfo.user} picks={debugInfo.picksLen} scanning={debugInfo.isScanning}
-      </div>
-    );
-  }
-
-  const [activeTab, setActiveTab] = useState<'signals' | 'settings'>('signals');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedStockForExecute, setSelectedStockForExecute] = useState<StockPick | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [isLoginCardOpen, setIsLoginCardOpen] = useState(false);
-  const loginDropdownRef = useRef<HTMLDivElement>(null);
-  const [capitalData, setCapitalData] = useState<{
-    availableCapital: number;
-    riskLimitPct: number;
-  } | null>(null);
-
-  const isLoggedIn = !!user;
-
-  /** Get display name: prefers profile full_name, then user metadata username, then email prefix */
-  function getDisplayName(user: typeof user | null): string {
-    if (!user) return '';
-    if (profile?.full_name) return profile.full_name;
-    if (user.user_metadata?.username) return user.user_metadata.username;
-    if (user.email) return user.email.split('@')[0];
-    return user.id ?? '';
-  }
-
-  /** Get single initial for avatar */
-  function getUserInitial(user: typeof user | null): string | null {
-    if (!user) return null;
-    if (user.user_metadata?.username) return user.user_metadata.username[0]?.toUpperCase() ?? null;
-    if (user.email) return user.email[0]?.toUpperCase() ?? null;
-    return null;
-  }
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!isLoginCardOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (loginDropdownRef.current && !loginDropdownRef.current.contains(e.target as Node)) {
-        setIsLoginCardOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isLoginCardOpen]);
-
-  // Mobile bottom-nav tabs. Icons are names into the shared <Icon> set —
-  // never emoji, so the glyphs stay crisp at any density and inherit color.
-  const mobileNavTabs: MobileNavTab[] = [
-    { id: 'signals', label: 'Signals', icon: 'bolt' },
-    { id: 'settings', label: 'Settings', icon: 'gear' },
-  ];
-
-  const handleExecute = async (params: any) => {
-    if (params.isPaperTrading) {
-      // Paper trading - create simulated position
-      const response = await authFetch('/api/paper-trade', {
-        method: 'POST',
-        body: JSON.stringify({
-          strategy_id: activeStrategy.id,
-          strategy_name: activeStrategy.name,
-          symbol: params.symbol,
-          name: params.name || params.symbol,
-          sector: params.sector || 'Unknown',
-          cap_category: params.capCategory || 'large',
-          entry_price: params.entryPrice,
-          stop_loss: params.stopLoss,
-          target1: params.target1,
-          target2: params.target2,
-          quantity: params.quantity,
-          risk_amount: params.riskAmount,
-          risk_pct: params.riskPct,
-          charges_estimate: params.charges,
-        }),
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(JSON.parse(body || '{}').error || 'Paper trade failed');
-      }
-
-      const result = await response.json();
-      console.log('Paper trade executed:', result);
-      toast.success(`Paper position opened: ${params.symbol} × ${params.quantity}`);
-      return result;
-    }
-
-    // Live trading: open Kite Publisher popup. The server-side execution
-    // record is no longer created here — live orders redirect to Kite and
-    // are tracked on the Kite platform (see /api/kite/publish for ticket
-    // issuance and the popup flow in kitePublisher.ts).
-    try {
-      await placeOrder({
-        exchange: params.exchange || 'NSE',
-        tradingsymbol: params.symbol,
-        transaction_type: 'BUY',
-        quantity: params.quantity,
-        order_type: 'MARKET',
-        product: params.product || 'CNC',
-      });
-    } catch (err: any) {
-      const code: string | undefined = err?.code;
-      if (code === 'KITE_KEY_NOT_CONFIGURED') {
-        toast.error('Configure Kite API key first');
-        setActiveTab('settings');
-      } else {
-        toast.error(err?.message || 'Failed to place order');
-      }
-      throw err;
-    }
-
-    toast.success(
-      `Order placed: ${params.symbol} × ${params.quantity}`
-    );
-    return { orderPlaced: true };
-  };
-
-  const handleExecuteInKite = async (stock: StockPick) => {
-    if (!isLoggedIn) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-    try {
-      const entryPrice = stock.signalDetails?.entry ?? stock.currentPrice;
-      const stopLoss = stock.signalDetails?.stopLoss ?? 0;
-      const target1 = stock.signalDetails?.target1 ?? 0;
-      const isBracketed = stopLoss > 0 && target1 > 0;
-      await placeOrder({
-        exchange: 'NSE',
-        tradingsymbol: stock.symbol.replace('.NS', ''),
-        transaction_type: 'BUY',
-        quantity: 1,
-        order_type: isBracketed ? 'SL' : 'MARKET',
-        product: isBracketed ? 'MIS' : 'CNC',
-        price: entryPrice,
-        trigger_price: isBracketed ? stopLoss : undefined,
-        target: isBracketed ? target1 : undefined,
-        readonly: false,
-      });
-      toast.success(`Kite order opened for ${stock.symbol}`);
-    } catch (error: any) {
-      console.error('Kite order failed:', error);
-      if (error?.code === 'KITE_KEY_NOT_CONFIGURED') {
-        toast.error('Add and save your Zerodha Publisher API key in Settings → Connections.');
-        setActiveTab('settings');
-      } else {
-        toast.error(error?.message || 'Kite order failed. Check your Zerodha Publisher key and try again.');
-      }
-    }
-  };
-
-  const handleExecuteInKiteOld = async (stock: StockPick) => {
-    try {
-      // Use a conservative default quantity for the direct card action;
-      // users can review and edit the basket on Kite before confirming.
-      await placeOrder({
-        exchange: 'NSE',
-        tradingsymbol: stock.symbol.replace('.NS', ''),
-        transaction_type: 'BUY',
-        quantity: 1,
-        order_type: 'MARKET',
-        product: 'CNC',
-        readonly: false,
-      });
-      toast.success(`Kite order opened for ${stock.symbol}`);
-    } catch (err: any) {
-      if (err?.code === 'KITE_KEY_NOT_CONFIGURED') {
-        toast.error('Configure Kite API key first');
-        setActiveTab('settings');
-      } else {
-        toast.error(err?.message || 'Failed to open Kite order');
-      }
-    }
-  };
-
-  // Fetch capital data for execute modal
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await authFetch('/api/capital');
-        if (!response.ok) throw new Error(`/api/capital ${response.status}`);
-        const data = await response.json();
-        if (cancelled) return;
-        setCapitalData({
-          availableCapital: data.availableCapital,
-          riskLimitPct: data.riskLimits?.riskPerTradePct || 2,
-        });
-      } catch (err) {
-        console.error('Failed to fetch capital:', err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoggedIn]);
+  const [isRefetching, setIsRefetching] = useState(false);
 
   // Reset to first page whenever the result set or sort changes shape
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, signalFilter, resultCapFilter, sortBy, picks.length, activeTab]);
+  }, [searchQuery, signalFilter, resultCapFilter, sortBy, picks.length]);
+
+  const handleRefetch = async () => {
+    setIsRefetching(true);
+    try {
+      await refetch();
+      toast.success('Data refreshed');
+    } catch {
+      toast.error('Refetch failed');
+    } finally {
+      setIsRefetching(false);
+    }
+  };
 
   // Filter and sort picks based on search query, signal filter, cap category & sort selection
   const processedPicks = [...picks]
@@ -357,13 +126,8 @@ function DashboardContent() {
   const strongBuyCount = picks.filter((p) => p.signal === 'strong-buy').length;
   const buyCount = picks.filter((p) => p.signal === 'buy').length;
 
-  // Slice into pages only on the signals tab
-  const totalPages = activeTab === 'signals'
-    ? Math.max(1, Math.ceil(processedPicks.length / RESULTS_PER_PAGE))
-    : 1;
-  const pagedPicks = activeTab === 'signals'
-    ? processedPicks.slice((currentPage - 1) * RESULTS_PER_PAGE, currentPage * RESULTS_PER_PAGE)
-    : processedPicks;
+  const totalPages = Math.max(1, Math.ceil(processedPicks.length / RESULTS_PER_PAGE));
+  const pagedPicks = processedPicks.slice((currentPage - 1) * RESULTS_PER_PAGE, currentPage * RESULTS_PER_PAGE);
 
   const avgUpside = picks.length
     ? (
@@ -376,11 +140,13 @@ function DashboardContent() {
       ).toFixed(1)
     : '0';
 
+  const lastUpdatedLabel = lastUpdated
+    ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
+
   return (
     <div className="flex flex-col min-h-screen selection:bg-slate-200 text-slate-800" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--ground)' }}>
-      {/* ===== TOP BAR =====
-           Clean top bar with brand, nav, and account actions.
-           CapitalBar floats below in a separate container. */}
+      {/* ===== TOP BAR ===== */}
       <header
         className="relative"
         style={{
@@ -388,12 +154,9 @@ function DashboardContent() {
           borderBottomColor: 'var(--border-default)',
         }}
       >
-        {/* Top row: brand + nav + account */}
-        {/* pl-[60px] on mobile accounts for fixed hamburger button + 8px gap, desktop pl-6 */}
         <div className="flex items-center h-12 pl-[60px] pr-3 gap-3 lg:pl-6">
-          {/* Brand — icon-only on mobile (left of header, after hamburger), full brand on desktop */}
+          {/* Brand — icon-only on mobile, full brand on desktop */}
           <div className="flex items-center shrink-0" style={{ gap: '0.5rem' }}>
-            {/* Logo icon — always visible, positioned after hamburger's fixed space */}
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               style={{ backgroundColor: 'var(--accent-brand)' }}
@@ -412,199 +175,67 @@ function DashboardContent() {
                 <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
-            {/* Brand name — desktop only */}
             <span className="hidden lg:block font-semibold" style={{ color: 'var(--text-primary)', fontSize: '14px' }}>
               Quant Vision
             </span>
           </div>
 
-          {/* Primary navigation */}
-          <nav
-            aria-label="Primary"
-            className="hidden lg:flex items-center font-medium ml-4"
-            style={{ gap: '1.25rem', fontSize: '13px' }}
-          >
-            {([
-              { id: 'signals', label: 'Signals' },
-              { id: 'settings', label: 'Settings' },
-            ] as const).map((t) => {
-              const isActive = activeTab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className="relative cursor-pointer transition-colors py-1"
-                  style={{
-                    color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
-                    fontWeight: isActive ? 600 : 500,
-                  }}
-                >
-                  {t.label}
-                  {isActive && (
-                    <motion.span
-                      layoutId="topnav-underline"
-                      className="absolute left-0 right-0 -bottom-0.5 h-0.5 rounded-full"
-                      style={{ backgroundColor: 'var(--accent-brand)' }}
-                      transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Right cluster: status + account */}
+          {/* Right cluster: data status + refetch */}
           <div className="flex items-center gap-2">
-            {/* Data source indicator */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5">
               <span className="w-2 h-2 rounded-full shrink-0 bg-slate-300" />
               <span className="text-[11px] font-medium whitespace-nowrap hidden sm:block" style={{ color: 'var(--text-secondary)' }}>
-                yfinance
+                Upstox
               </span>
+              {lastUpdatedLabel && (
+                <span className="text-[11px] whitespace-nowrap" style={{ color: 'var(--text-tertiary)' }}>
+                  · {lastUpdatedLabel}
+                </span>
+              )}
             </div>
 
-            {/* Zerodha status button */}
-            <ZerodhaStatusButton
-              onNavigateToProfile={() => setActiveTab('settings')}
-            />
-
-            {/* Divider */}
-            <div className="w-px h-5 shrink-0" style={{ backgroundColor: 'var(--border-subtle)' }} />
-
-            {/* Account — sign in button or avatar */}
-            {user ? (
-              <div className="relative">
-                <button
-                  onClick={() => setIsLoginCardOpen(!isLoginCardOpen)}
-                  className="flex items-center gap-2.5 cursor-pointer transition-all rounded-xl px-2.5 py-1.5 hover:bg-[color:var(--elevated-2)]"
-                  aria-label="Account menu"
-                  aria-expanded={isLoginCardOpen}
-                >
-                  {/* Avatar with ring */}
-                  <div className="relative">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ring-2 ring-white/10"
-                      style={{ backgroundColor: 'var(--accent-brand)' }}
-                    >
-                      <span className="text-xs font-bold" style={{ color: '#fff' }}>
-                        {(profile?.full_name?.[0] || getUserInitial(user) || 'U').toUpperCase()}
-                      </span>
-                    </div>
-                    {/* Online indicator dot */}
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[color:var(--ground)]" />
-                  </div>
-                  <div className="hidden sm:flex flex-col items-start leading-none">
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {profile?.full_name?.split(' ')[0] || getDisplayName(user)}
-                    </span>
-                    <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                      {user?.user_metadata?.username || 'Account'}
-                    </span>
-                  </div>
-                  <svg className="w-3 h-3 hidden sm:block transition-transform" style={{ color: 'var(--text-tertiary)', transform: isLoginCardOpen ? 'rotate(180deg)' : 'none' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {/* Dropdown */}
-                {isLoginCardOpen && (
-                  <div
-                    ref={loginDropdownRef}
-                    className="absolute right-0 top-full mt-2 w-64 rounded-2xl border shadow-xl overflow-hidden"
-                    style={{
-                      backgroundColor: 'var(--elevated-1)',
-                      borderColor: 'var(--border-default)',
-                      boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
-                      zIndex: 9999,
-                    }}
-                  >
-                    {/* Profile header */}
-                    <div className="px-4 py-3.5 border-b flex items-center gap-3" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--elevated-2)' }}>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--accent-brand)' }}>
-                        <span className="text-sm font-bold" style={{ color: '#fff' }}>
-                          {(profile?.full_name?.[0] || getUserInitial(user) || 'U').toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                          {profile?.full_name || getDisplayName(user)}
-                        </p>
-                        <p className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                          {user?.user_metadata?.username || user?.email || ''}
-                        </p>
-
-                      </div>
-                    </div>
-                    {/* Quick actions */}
-                    <div className="py-1">
-                      <button
-                        onClick={() => { setIsLoginCardOpen(false); setActiveTab('settings'); }}
-                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--elevated-2)' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}>
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1m15.5-7.5l-4.2 4.2m-4.6 4.6l-4.2 4.2m12.8 0l-4.2-4.2m-4.6-4.6l-4.2-4.2"/>
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>My Profile</p>
-                          <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Settings & connections</p>
-                        </div>
-                      </button>
-                      <button
-                        onClick={async () => {
-                          setIsLoginCardOpen(false);
-                          await signOut();
-                          toast.success('Signed out successfully');
-                        }}
-                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors hover:bg-[color:var(--card-bg-hover)] cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--hazard-red-bg)' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--hazard-red)' }}>
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                            <polyline points="16 17 21 12 16 7"/>
-                            <line x1="21" y1="12" x2="9" y2="12"/>
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Sign out</p>
-                          <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Log out of your account</p>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-1.5 font-semibold rounded-lg cursor-pointer transition-all whitespace-nowrap shrink-0"
-                style={{
-                  backgroundColor: 'var(--accent-brand)',
-                  color: '#fff',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-                  padding: 'clamp(0.25rem, 0.6cqi, 0.4rem) clamp(0.5rem, 1.2cqi, 0.65rem)',
-                  fontSize: 'var(--topbar-text)',
-                }}
+            {/* Refetch button — forces a fresh server-side scan */}
+            <button
+              onClick={handleRefetch}
+              disabled={isRefetching}
+              className="flex items-center gap-1.5 font-semibold rounded-lg cursor-pointer transition-all whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: 'var(--accent-brand)',
+                color: '#fff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                padding: 'clamp(0.25rem, 0.6cqi, 0.4rem) clamp(0.5rem, 1.2cqi, 0.65rem)',
+                fontSize: 'var(--topbar-text)',
+              }}
+              aria-label="Refetch data"
+            >
+              <svg
+                className={isRefetching ? 'animate-spin' : undefined}
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                aria-hidden="true"
               >
-                Sign in
-              </button>
-            )}
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="hidden sm:inline">Refetch</span>
+            </button>
           </div>
         </div>
 
-          {/* Determinate scan progress — hairline along the bar's bottom edge. */}
+          {/* Scan progress — hairline along the bar's bottom edge. */}
           <AnimatePresence>
             {isScanning && (
               <motion.div
                 className="absolute left-0 bottom-0 h-[2px] pointer-events-none"
                 style={{ backgroundColor: 'var(--accent-brand)' }}
                 initial={{ width: 0, opacity: 0 }}
-                animate={{ width: `${progress.percent}%`, opacity: 1 }}
+                animate={{ width: '100%', opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ width: { duration: 0.35, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 0.2 } }}
               />
@@ -612,386 +243,322 @@ function DashboardContent() {
           </AnimatePresence>
         </header>
 
-        {/* ===== BODY: 100vh - 60px, flex row, sidebar + main (no full-page scroll). ===== */}
       <div className="kite-body">
-        {/* Left pane — Kite sidebar. Only on signals tab. */}
-        {activeTab === 'signals' && (
-          <MobileSidebarDrawer>
-            <Sidebar activeTab={activeTab} />
-          </MobileSidebarDrawer>
-        )}
+        {/* Left pane — sidebar */}
+        <MobileSidebarDrawer>
+          <Sidebar activeTab="signals" />
+        </MobileSidebarDrawer>
 
-        {/* Main pane — fluid width, scrolls independently. */}
+        {/* Main pane */}
         <main className="kite-main">
-            {/* Tab Body View */}
-            {activeTab === 'signals' && (
-              <>
-                {/* Heading row (page title + subtitle). */}
-                <div className="flex flex-col gap-1 mb-6">
-                  <h1 className="hidden lg:block text-[13px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                    {activeStrategy.name}
-                  </h1>
-                  <h1 className="lg:hidden text-[22px] font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                    {activeStrategy.name}
-                  </h1>
-                  <p className="text-[13px] flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    <span>Zerodha-momentum swing picks, screened across the active market cap scope.</span>
-                    <InfoTooltip
-                      label="About this strategy"
-                      content={activeStrategy.description}
-                      side="bottom"
-                      size="md"
+            {/* Heading row */}
+            <div className="flex flex-col gap-1 mb-6">
+              <h1 className="hidden lg:block text-[13px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                {activeStrategy.name}
+              </h1>
+              <h1 className="lg:hidden text-[22px] font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                {activeStrategy.name}
+              </h1>
+              <p className="text-[13px] flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                <span>Swing picks, screened across the active market cap scope.</span>
+                <InfoTooltip
+                  label="About this strategy"
+                  content={activeStrategy.description}
+                  side="bottom"
+                  size="md"
+                />
+              </p>
+            </div>
+
+            {/* Metrics Overview Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {([
+                { label: 'Qualified Picks', value: picks.length, color: 'var(--text-primary)', suffix: '' },
+                { label: 'Strong Buy', value: strongBuyCount, color: 'var(--success-green)', suffix: '' },
+                { label: 'Buy Signals', value: buyCount, color: 'var(--accent-blue)', suffix: '' },
+                { label: 'Avg Target 1 Upside', value: Number(avgUpside), color: 'var(--success-green)', suffix: '%', prefix: '+' },
+              ] as const).map((m, i) => (
+                <motion.div
+                  key={m.label}
+                  className="kite-metric"
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: Math.min(i * 0.05, 0.2), ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <p className="kite-metric-label">{m.label}</p>
+                  <p className="kite-metric-value" style={{ color: m.color }}>
+                    {'prefix' in m ? m.prefix : ''}
+                    <AnimatedNumber
+                      value={m.value}
+                      format={(v) => (m.suffix === '%' ? v.toFixed(1) : Math.round(v).toString())}
+                      duration={0.7}
                     />
+                    {m.suffix}
                   </p>
-                </div>
+                  <span className="kite-metric-tick" style={{ backgroundColor: m.color }} />
+                </motion.div>
+              ))}
+            </div>
 
-                {/* Metrics Overview Strip
-              <>
-                {/* Metrics Overview Strip — hairline-bordered tiles. Label reads
-                    first, value second at a restrained size, and a short brand
-                    tick anchors each tile so the numbers no longer float in
-                    unbalanced whitespace. Values count up on change. */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {([
-                    { label: 'Qualified Picks', value: picks.length, color: 'var(--text-primary)', suffix: '' },
-                    { label: 'Strong Buy', value: strongBuyCount, color: 'var(--success-green)', suffix: '' },
-                    { label: 'Buy Signals', value: buyCount, color: 'var(--accent-blue)', suffix: '' },
-                    { label: 'Avg Target 1 Upside', value: Number(avgUpside), color: 'var(--success-green)', suffix: '%', prefix: '+' },
-                  ] as const).map((m, i) => (
-                    <motion.div
-                      key={m.label}
-                      className="kite-metric"
-                      initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.35, delay: Math.min(i * 0.05, 0.2), ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <p className="kite-metric-label">{m.label}</p>
-                      <p className="kite-metric-value" style={{ color: m.color }}>
-                        {'prefix' in m ? m.prefix : ''}
-                        <AnimatedNumber
-                          value={m.value}
-                          format={(v) => (m.suffix === '%' ? v.toFixed(1) : Math.round(v).toString())}
-                          duration={0.7}
-                        />
-                        {m.suffix}
-                      </p>
-                      <span className="kite-metric-tick" style={{ backgroundColor: m.color }} />
-                    </motion.div>
-                  ))}
-                </div>
-
-                {/* Strategy Rules Accordion Card — collapsed by default so the
-                    UI stays lean; users tap the header to read the full rule set. */}
-                <div className="mt-3">
-                  <ExpandableCard
-                    title="Strategy Criteria & Rules"
-                    defaultOpen={false}
-                    icon={
-                      <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    }
-                    badge={
-                      <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-                        {activeStrategy.rules.length} rules
-                      </span>
-                    }
-                  >
-                    {/* Strategy metadata strip — clean info row at the top */}
-                    <div className="flex items-center gap-3 pb-3 mb-4 border-b border-[color:var(--border-subtle)]">
-                      <span className="text-[11px] font-semibold text-[color:var(--accent-brand)] bg-[color:var(--accent-brand)]/10 px-2.5 py-1 rounded-full border border-[color:var(--accent-brand)]/20">
-                        {activeStrategy.shortName}
-                      </span>
-                      {activeStrategy.description && (
-                        <span className="text-[11px] text-[color:var(--text-secondary)] leading-snug flex-1">
-                          {activeStrategy.description}
-                        </span>
-                      )}
-                    </div>
-
-                    <ul className="flex flex-col gap-2">
-                      {activeStrategy.rules.map((rule, idx) => {
-                        // Categorize rules: first is Filter, last is Risk, middle are Entry
-                        const isFirst = idx === 0;
-                        const isLast = idx === activeStrategy.rules.length - 1;
-                        const ruleCategory = isFirst ? 'Filter' : isLast ? 'Risk' : 'Entry';
-                        const chipClass =
-                          ruleCategory === 'Filter'
-                            ? 'bg-[color:var(--elevated-1)] text-[color:var(--text-tertiary)] border-[color:var(--border-subtle)]'
-                            : ruleCategory === 'Risk'
-                            ? 'bg-[color:var(--hazard-red-bg)] text-[color:var(--hazard-red)] border-[color:var(--hazard-red)]/30'
-                            : 'bg-[color:var(--accent-blue-bg)] text-[color:var(--accent-blue)] border-[color:var(--accent-blue)]/30';
-                        const numClass =
-                          ruleCategory === 'Filter'
-                            ? 'bg-[color:var(--elevated-1)] text-[color:var(--text-tertiary)]'
-                            : ruleCategory === 'Risk'
-                            ? 'bg-[color:var(--hazard-red-bg)] text-[color:var(--hazard-red)]'
-                            : 'bg-[color:var(--accent-blue-bg)] text-[color:var(--accent-blue)]';
-
-                        return (
-                          <li key={idx} className="flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-[color:var(--elevated-1)] transition-colors">
-                            {/* Category chip */}
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 mt-0.5 uppercase tracking-wide ${chipClass}`}>
-                              {ruleCategory}
-                            </span>
-                            {/* Number circle */}
-                            <span className={`w-5 h-5 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 ${numClass}`}>
-                              {idx + 1}
-                            </span>
-                            {/* Rule text */}
-                            <span className="text-sm leading-snug text-[color:var(--text-secondary)] flex-1">{rule}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </ExpandableCard>
-                </div>
-              </>
-            )}
-
-            {/* Signals Tab */}
-            {activeTab === 'signals' && (
-              <>
-                {/* Filters & Search Control Bar */}
-                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-4 mt-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1 text-[12px]">
-                      <span className="px-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Refine cap:</span>
-                      {(
-                        [
-                          { id: 'all', label: 'All' },
-                          { id: 'large', label: 'Large Cap' },
-                          { id: 'mid', label: 'Mid Cap' },
-                          { id: 'small', label: 'Small Cap' },
-                        ] as const
-                      ).map((capItem) => {
-                        const isActive = resultCapFilter === capItem.id;
-                        return (
-                          <button
-                            key={capItem.id}
-                            onClick={() => setResultCapFilter(capItem.id)}
-                            className="px-2.5 py-1 font-medium transition-colors cursor-pointer"
-                            style={{
-                              color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
-                              borderBottom: isActive ? '2px solid var(--accent-brand)' : '2px solid transparent',
-                              borderRadius: 0,
-                            }}
-                          >
-                            {capItem.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex items-center gap-1 text-[12px]">
-                      <span className="px-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Signal:</span>
-                      {(['all', 'strong-buy', 'buy', 'hold'] as const).map((filter) => {
-                        const isActive = signalFilter === filter;
-                        return (
-                          <button
-                            key={filter}
-                            onClick={() => setSignalFilter(filter)}
-                            className="px-2.5 py-1 font-medium transition-colors cursor-pointer capitalize"
-                            style={{
-                              color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
-                              borderBottom: isActive ? '2px solid var(--accent-brand)' : '2px solid transparent',
-                              borderRadius: 0,
-                            }}
-                          >
-                            {filter.replace('-', ' ')}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div
-                      className="relative flex items-center px-3 py-1.5 text-[12px] font-medium"
-                      style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
-                    >
-                      <svg className="w-3.5 h-3.5 mr-2 shrink-0" style={{ color: 'var(--text-tertiary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-                      </svg>
-                      <span className="font-medium mr-1.5" style={{ color: 'var(--text-tertiary)' }}>Sort:</span>
-                      <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as any)}
-                        className="bg-transparent font-semibold focus:outline-none cursor-pointer pr-2"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        <option value="rank">Strategy Rank (Default)</option>
-                        <option value="price-desc">Price: High to Low</option>
-                        <option value="price-asc">Price: Low to High</option>
-                        <option value="change-desc">Returns %: High to Low</option>
-                        <option value="change-asc">Returns %: Low to High</option>
-                        <option value="name-asc">Stock Name: A to Z</option>
-                        <option value="upside-desc">Target Upside %</option>
-                        <option value="rs-desc">Relative Strength (RS)</option>
-                      </select>
-                    </div>
-
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search stock or sector..."
-                        className="w-full sm:w-56 pl-9 pr-4 py-1.5 text-[12px] focus:outline-none placeholder:text-[color:var(--text-tertiary)]"
-                        style={{ color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
-                      />
-                      <svg
-                        className="w-4 h-4 absolute left-3 top-2"
-                        style={{ color: 'var(--text-tertiary)' }}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stock Cards */}
-                <div className="space-y-4 pt-2">
-                  {isScanning ? (
-                    <div
-                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8"
-                      role="status"
-                      aria-live="polite"
-                      aria-label={`Scanning stocks, ${progress.percent}% complete`}
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                        <div
-                          key={n}
-                          className="p-4 rounded-2xl border border-[color:var(--border-subtle)]"
-                          style={{ backgroundColor: 'var(--elevated-1)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className="w-9 h-9 rounded-lg" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                            <div className="flex-1 space-y-2">
-                              <div className="h-3 w-3/4" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                              <div className="h-2.5 w-1/2" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                            </div>
-                          </div>
-                          <div className="h-2.5 mb-2" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                          <div className="h-2.5 w-4/5" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                          <div className="flex items-center justify-between mt-4 pt-2 border-t border-[color:var(--border-subtle)]">
-                            <div className="h-2.5 w-1/3" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                            <div className="h-4 w-16 rounded-md" style={{ backgroundColor: 'var(--ground-secondary)' }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <AnimatePresence mode="popLayout">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {pagedPicks.map((stock, index) => (
-                          <StockCard
-                            key={stock.id}
-                            stock={stock}
-                            index={index}
-                            onOpenExecuteModal={(stk) => setSelectedStockForExecute(stk)}
-                            onExecuteInKite={handleExecuteInKite}
-                            isLoggedIn={isLoggedIn}
-                          />
-                        ))}
-                      </div>
-                    </AnimatePresence>
+            {/* Strategy Rules Accordion Card */}
+            <div className="mt-3">
+              <ExpandableCard
+                title="Strategy Criteria & Rules"
+                defaultOpen={false}
+                icon={
+                  <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+                badge={
+                  <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+                    {activeStrategy.rules.length} rules
+                  </span>
+                }
+              >
+                <div className="flex items-center gap-3 pb-3 mb-4 border-b border-[color:var(--border-subtle)]">
+                  <span className="text-[11px] font-semibold text-[color:var(--accent-brand)] bg-[color:var(--accent-brand)]/10 px-2.5 py-1 rounded-full border border-[color:var(--accent-brand)]/20">
+                    {activeStrategy.shortName}
+                  </span>
+                  {activeStrategy.description && (
+                    <span className="text-[11px] text-[color:var(--text-secondary)] leading-snug flex-1">
+                      {activeStrategy.description}
+                    </span>
                   )}
+                </div>
 
-                  {isScanning && <></>}
+                <ul className="flex flex-col gap-2">
+                  {activeStrategy.rules.map((rule, idx) => {
+                    // Categorize rules: first is Filter, last is Risk, middle are Entry
+                    const isFirst = idx === 0;
+                    const isLast = idx === activeStrategy.rules.length - 1;
+                    const ruleCategory = isFirst ? 'Filter' : isLast ? 'Risk' : 'Entry';
+                    const chipClass =
+                      ruleCategory === 'Filter'
+                        ? 'bg-[color:var(--elevated-1)] text-[color:var(--text-tertiary)] border-[color:var(--border-subtle)]'
+                        : ruleCategory === 'Risk'
+                        ? 'bg-[color:var(--hazard-red-bg)] text-[color:var(--hazard-red)] border-[color:var(--hazard-red)]/30'
+                        : 'bg-[color:var(--accent-blue-bg)] text-[color:var(--accent-blue)] border-[color:var(--accent-blue)]/30';
+                    const numClass =
+                      ruleCategory === 'Filter'
+                        ? 'bg-[color:var(--elevated-1)] text-[color:var(--text-tertiary)]'
+                        : ruleCategory === 'Risk'
+                        ? 'bg-[color:var(--hazard-red-bg)] text-[color:var(--hazard-red)]'
+                        : 'bg-[color:var(--accent-blue-bg)] text-[color:var(--accent-blue)]';
 
-                  {!isScanning && processedPicks.length === 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                      className="py-16 text-center rounded-3xl"
-                      style={{
-                        backgroundColor: 'var(--ground)',
-                        border: '1px solid var(--border-default)',
-                      }}
-                    >
-                      <div
-                        className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3"
+                    return (
+                      <li key={idx} className="flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-[color:var(--elevated-1)] transition-colors">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 mt-0.5 uppercase tracking-wide ${chipClass}`}>
+                          {ruleCategory}
+                        </span>
+                        <span className={`w-5 h-5 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 ${numClass}`}>
+                          {idx + 1}
+                        </span>
+                        <span className="text-sm leading-snug text-[color:var(--text-secondary)] flex-1">{rule}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </ExpandableCard>
+            </div>
+
+            {/* Filters & Search Control Bar */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-4 mt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 text-[12px]">
+                  <span className="px-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Refine cap:</span>
+                  {(
+                    [
+                      { id: 'all', label: 'All' },
+                      { id: 'large', label: 'Large Cap' },
+                      { id: 'mid', label: 'Mid Cap' },
+                      { id: 'small', label: 'Small Cap' },
+                    ] as const
+                  ).map((capItem) => {
+                    const isActive = resultCapFilter === capItem.id;
+                    return (
+                      <button
+                        key={capItem.id}
+                        onClick={() => setResultCapFilter(capItem.id)}
+                        className="px-2.5 py-1 font-medium transition-colors cursor-pointer"
                         style={{
-                          backgroundColor: 'var(--elevated-2)',
-                          color: 'var(--text-tertiary)',
+                          color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
+                          borderBottom: isActive ? '2px solid var(--accent-brand)' : '2px solid transparent',
+                          borderRadius: 0,
                         }}
                       >
-                        <Icon name="search" size={26} strokeWidth={1.75} />
-                      </div>
-                      <h4 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        No Matching Stocks Found
-                      </h4>
-                      <p className="text-xs mt-1 max-w-xs mx-auto" style={{ color: 'var(--text-secondary)' }}>
-                        Try switching market cap scope (Large/Mid/Small) or selecting
-                        a different strategy from the left sidebar.
-                      </p>
-                    </motion.div>
-                  )}
+                        {capItem.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Pagination */}
-                {!isScanning && processedPicks.length > RESULTS_PER_PAGE && (
-                  <div className="pt-4">
-                    <Pagination
-                      currentPage={currentPage}
-                      totalPages={totalPages}
-                      onPageChange={(p) => {
-                        setCurrentPage(p);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                    />
-                  </div>
-                )}
-              </>
-            )}
+                <div className="flex items-center gap-1 text-[12px]">
+                  <span className="px-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Signal:</span>
+                  {(['all', 'strong-buy', 'buy', 'hold'] as const).map((filter) => {
+                    const isActive = signalFilter === filter;
+                    return (
+                      <button
+                        key={filter}
+                        onClick={() => setSignalFilter(filter)}
+                        className="px-2.5 py-1 font-medium transition-colors cursor-pointer capitalize"
+                        style={{
+                          color: isActive ? 'var(--accent-brand)' : 'var(--text-secondary)',
+                          borderBottom: isActive ? '2px solid var(--accent-brand)' : '2px solid transparent',
+                          borderRadius: 0,
+                        }}
+                      >
+                        {filter.replace('-', ' ')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-            {/* Settings Tab */}
-            {activeTab === 'settings' && (
-              <SettingsPage
-                key={isLoggedIn ? 'authed' : 'guest'}
-                isLoggedIn={isLoggedIn}
-                onLoginClick={() => setIsAuthModalOpen(true)}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="relative flex items-center px-3 py-1.5 text-[12px]"
+                  style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                >
+                  <svg className="w-3.5 h-3.5 mr-2 shrink-0" style={{ color: 'var(--text-tertiary)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  <span className="font-medium mr-1.5" style={{ color: 'var(--text-tertiary)' }}>Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-transparent font-semibold focus:outline-none cursor-pointer pr-2"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    <option value="rank">Strategy Rank (Default)</option>
+                    <option value="price-desc">Price: High to Low</option>
+                    <option value="price-asc">Price: Low to High</option>
+                    <option value="change-desc">Returns %: High to Low</option>
+                    <option value="change-asc">Returns %: Low to High</option>
+                    <option value="name-asc">Stock Name: A to Z</option>
+                    <option value="upside-desc">Target Upside %</option>
+                    <option value="rs-desc">Relative Strength (RS)</option>
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search stock or sector..."
+                    className="w-full sm:w-56 pl-9 pr-4 py-1.5 text-[12px] focus:outline-none placeholder:text-[color:var(--text-tertiary)]"
+                    style={{ color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
+                  />
+                  <svg
+                    className="w-4 h-4 absolute left-3 top-2"
+                    style={{ color: 'var(--text-tertiary)' }}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Stock Cards */}
+            <div className="space-y-4 pt-2">
+              {isScanning ? (
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-8"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Fetching latest signals"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                    <div
+                      key={n}
+                      className="p-4 rounded-2xl border border-[color:var(--border-subtle)]"
+                      style={{ backgroundColor: 'var(--elevated-1)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-9 h-9 rounded-lg" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-3/4" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                          <div className="h-2.5 w-1/2" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                        </div>
+                      </div>
+                      <div className="h-2.5 mb-2" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                      <div className="h-2.5 w-4/5" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                      <div className="flex items-center justify-between mt-4 pt-2 border-t border-[color:var(--border-subtle)]">
+                        <div className="h-2.5 w-1/3" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                        <div className="h-4 w-16 rounded-md" style={{ backgroundColor: 'var(--ground-secondary)' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <AnimatePresence mode="popLayout">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {pagedPicks.map((stock, index) => (
+                      <StockCard
+                        key={stock.id}
+                        stock={stock}
+                        index={index}
+                      />
+                    ))}
+                  </div>
+                </AnimatePresence>
+              )}
+
+              {!isScanning && processedPicks.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="py-16 text-center rounded-3xl"
+                  style={{
+                    backgroundColor: 'var(--ground)',
+                    border: '1px solid var(--border-default)',
+                  }}
+                >
+                  <div
+                    className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3"
+                    style={{
+                      backgroundColor: 'var(--elevated-2)',
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
+                    <Icon name="search" size={26} strokeWidth={1.75} />
+                  </div>
+                  <h4 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    No Matching Stocks Found
+                  </h4>
+                  <p className="text-xs mt-1 max-w-xs mx-auto" style={{ color: 'var(--text-secondary)' }}>
+                    Try switching market cap scope (Large/Mid/Small) or selecting
+                    a different strategy from the left sidebar.
+                  </p>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Pagination */}
+            {!isScanning && processedPicks.length > RESULTS_PER_PAGE && (
+              <div className="pt-4">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={(p) => {
+                    setCurrentPage(p);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                />
+              </div>
             )}
           </main>
       </div>
-
-        {/* Mobile bottom tab bar — hidden on desktop, shown on mobile */}
-        <MobileNav
-          tabs={mobileNavTabs}
-          activeTab={activeTab}
-          onChange={(id) => {
-            setActiveTab(id as typeof activeTab);
-          }}
-        />
-
-        {/* Execute Trade Modal */}
-        <ExecuteModal
-          key={selectedStockForExecute ? `exec-${selectedStockForExecute.id || selectedStockForExecute.symbol}` : 'exec-closed'}
-          isOpen={!!selectedStockForExecute}
-          stock={selectedStockForExecute}
-          onClose={() => setSelectedStockForExecute(null)}
-          onExecute={handleExecute}
-          isLoggedIn={isLoggedIn}
-          availableCapital={capitalData?.availableCapital || 0}
-          riskLimitPct={capitalData?.riskLimitPct || 2}
-          isPaperTrading={profile?.paper_trading_enabled ?? true}
-        />
-
-        {/* Auth Modal */}
-        {isAuthModalOpen && (
-          <AuthPage onClose={() => setIsAuthModalOpen(false)} />
-        )}
     </div>
   );
 }
@@ -999,20 +566,13 @@ function DashboardContent() {
 export function App() {
   return (
     <ErrorBoundary>
-      <MountIndicator />
-      <AuthProvider>
-        <StrategyProvider>
-          <TierProvider>
-          <ToastProvider>
-            <ThemeBootstrap />
-            <MobileBodyClass />
-            <UpgradeModal>
-              <DashboardContent />
-            </UpgradeModal>
-          </ToastProvider>
-          </TierProvider>
-        </StrategyProvider>
-      </AuthProvider>
+      <StrategyProvider>
+        <ToastProvider>
+          <ThemeBootstrap />
+          <MobileBodyClass />
+          <DashboardContent />
+        </ToastProvider>
+      </StrategyProvider>
     </ErrorBoundary>
   );
 }
@@ -1024,4 +584,3 @@ function ThemeBootstrap() {
 }
 
 export default App;
-
